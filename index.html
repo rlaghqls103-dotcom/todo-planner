@@ -257,6 +257,7 @@ body { font-size: clamp(14px, 0.35vw + 9px, 16px) }
   .wrap { height: 100dvh }
   .cell { min-height: 0 }
   .wcol { min-height: 0 }
+  .wk { flex: 1 1 0; min-height: 0 }
 }
 /* 좁은 화면: 목록을 달력 아래로 */
 @media (max-width: 999px) {
@@ -264,6 +265,34 @@ body { font-size: clamp(14px, 0.35vw + 9px, 16px) }
   .side { overflow: visible }
   .sidebtn { display: none }
   .layout.noside .side { display: flex }
+}
+
+/* ===== 기간 일정 막대 ===== */
+.month .days { display: flex; flex-direction: column }
+.wk { position: relative; flex: 0 0 auto }
+.wkcells { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); height: 100% }
+.cell .chips { margin-top: calc(var(--lanes, 0) * 22px) }
+.bars { position: absolute; left: 0; right: 0; top: 34px; display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); grid-auto-rows: 20px; row-gap: 2px; pointer-events: none; padding: 0 4px }
+.bar { pointer-events: auto; border: 0; margin: 0 2px; padding: 0 8px; border-radius: 5px; font: inherit; font-size: .82em; line-height: 20px; text-align: left; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: pointer;
+  color: var(--ink); background: color-mix(in srgb, var(--accent) 22%, var(--surface)); box-shadow: inset 3px 0 0 var(--low) }
+.bar.high { box-shadow: inset 3px 0 0 var(--hi); background: color-mix(in srgb, var(--hi) 18%, var(--surface)) }
+.bar.mid { box-shadow: inset 3px 0 0 var(--mid); background: color-mix(in srgb, var(--mid) 20%, var(--surface)) }
+.bar.low { box-shadow: inset 3px 0 0 var(--low); background: color-mix(in srgb, var(--low) 22%, var(--surface)) }
+.bar.cont-l { border-top-left-radius: 0; border-bottom-left-radius: 0; margin-left: -4px; box-shadow: none }
+.bar.cont-r { border-top-right-radius: 0; border-bottom-right-radius: 0; margin-right: -4px }
+.bar.done { opacity: .5; text-decoration: line-through }
+.bar:hover { filter: brightness(.96) }
+.bar .bt { font-family: var(--f-mono); margin-right: 4px }
+.weekwrap { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 8px }
+.wbars { position: static; padding: 0; column-gap: 8px }
+.wbars .bar { margin: 0 }
+.wbars .bar.cont-l { margin-left: -8px } .wbars .bar.cont-r { margin-right: -8px }
+.spanlbl { color: var(--accent) }
+.dur { font-size: 12px; color: var(--muted); margin-left: 6px }
+@media (max-width: 640px) {
+  .bars { top: 30px; grid-auto-rows: 6px; padding: 0 2px }
+  .bars .bar { font-size: 0; padding: 0; line-height: 6px; border-radius: 3px }
+  .cell .dots { margin-top: calc(var(--lanes, 0) * 8px) }
 }
 
 @media (max-width: 760px) {
@@ -404,6 +433,13 @@ body { font-size: clamp(14px, 0.35vw + 9px, 16px) }
   alignMonth(S.cursor);
 
   /* ---------- occurrences ---------- */
+  // 기간 일정: endDate가 시작 날짜보다 뒤면 여러 날에 걸친 일정 (반복 일정과는 같이 쓰지 않음)
+  const endOf = t => (!t.repeat && t.endDate && t.endDate > t.date) ? t.endDate : t.date;
+  const isSpan = t => endOf(t) !== t.date;
+  const dayDiff = (a, b) => Math.round((parse(b) - parse(a)) / 86400000);
+  const spanLen = t => dayDiff(t.date, endOf(t)) + 1;
+  const fmtShort = ds => { const d = parse(ds); return `${d.getMonth() + 1}/${d.getDate()}`; };
+  const spanLabel = t => `${fmtShort(t.date)}–${fmtShort(endOf(t))}`;
   function occursOn(t, ds) {
     if (!t.repeat) return t.date === ds;
     if (ds < t.date || (t.repeat.until && ds > t.repeat.until)) return false;
@@ -429,13 +465,18 @@ body { font-size: clamp(14px, 0.35vw + 9px, 16px) }
     }
     return true;
   }
-  const cmp = (a, b) => a.date.localeCompare(b.date) || (a.t.time || '99:99').localeCompare(b.t.time || '99:99')
+  const cmp = (a, b) => a.date.localeCompare(b.date) || isSpan(b.t) - isSpan(a.t) || a.t.date.localeCompare(b.t.date) || (a.t.time || '99:99').localeCompare(b.t.time || '99:99')
     || (PRI_ORDER[a.t.priority] ?? 1) - (PRI_ORDER[b.t.priority] ?? 1) || (a.t.title || '').localeCompare(b.t.title || '');
   function occRange(from, to, filtered = true) {
     const out = [];
     for (const t of S.tasks) {
       if (!t.date) continue;
-      if (!t.repeat) { if (t.date >= from && t.date <= to) out.push(mk(t, t.date)); continue; }
+      if (!t.repeat) {
+        const e = endOf(t);
+        if (e < from || t.date > to) continue;
+        for (let d = t.date > from ? t.date : from; d <= e && d <= to; d = addDays(d, 1)) out.push(mk(t, d));
+        continue;
+      }
       let d = t.date > from ? t.date : from;
       const end = t.repeat.until && t.repeat.until < to ? t.repeat.until : to;
       while (d <= end) { if (occursOn(t, d)) out.push(mk(t, d)); d = addDays(d, 1); }
@@ -443,7 +484,7 @@ body { font-size: clamp(14px, 0.35vw + 9px, 16px) }
     return (filtered ? out.filter(passes) : out).sort(cmp);
   }
   const byDate = occs => occs.reduce((m, o) => ((m[o.date] ||= []).push(o), m), {});
-  const overdue = () => S.tasks.filter(t => !t.repeat && !t.done && t.date && t.date < today()).map(t => mk(t, t.date)).filter(passes).sort(cmp);
+  const overdue = () => S.tasks.filter(t => !t.repeat && !t.done && t.date && endOf(t) < today()).map(t => mk(t, t.date)).filter(passes).sort(cmp);
   const ratio = occs => { const d = occs.filter(o => o.done).length; return { d, n: occs.length, p: occs.length ? Math.round(d / occs.length * 100) : 0 }; };
 
   /* ---------- pieces ---------- */
@@ -456,7 +497,8 @@ body { font-size: clamp(14px, 0.35vw + 9px, 16px) }
     const meta = [
       t.time ? `<span class="time">${esc(t.time)}</span>` : '',
       t.alarmOff ? (t.time || t.alarm ? `<span>알림 끔</span>` : '') : t.alarm ? `<span title="알림 시간">알림 <span class="time">${esc(t.alarm)}</span></span>` : '',
-      opt.showDate ? `<span>${fmtDay(o.date)}</span>` : '',
+      opt.showDate ? `<span>${isSpan(t) ? `${spanLabel(t)} · ${spanLen(t)}일간 · 끝난 지 ${dayDiff(endOf(t), today())}일` : fmtDay(o.date)}</span>`
+        : isSpan(t) ? `<span class="spanlbl">${spanLabel(t)} · ${opt.progress ? `${dayDiff(t.date, o.date) + 1}/${spanLen(t)}일째` : `${spanLen(t)}일간`}</span>` : '',
       catChip(t.category),
       t.repeat ? `<span title="반복 일정">↻ ${REPEAT[t.repeat.freq] || ''}</span>` : '',
       t.memo ? `<span class="memo">${esc(t.memo)}</span>` : '',
@@ -509,14 +551,36 @@ body { font-size: clamp(14px, 0.35vw + 9px, 16px) }
   }
 
   // 달력 칸 높이에 맞춰 보여 줄 일정 칩 개수 (1–6)
-  let chipCap = 3;
+  let cellH = 110;
   function updateCap() {
     const c = $('.month .days .cell');
     if (!c) return false;
-    const n = Math.max(1, Math.min(6, Math.floor((c.clientHeight - 44) / 22)));
-    if (n === chipCap) return false;
-    chipCap = n;
+    const h = c.clientHeight;
+    if (Math.abs(h - cellH) < 4) return false;
+    cellH = h;
     return true;
+  }
+
+  // 한 주(ws부터 7일) 안의 기간 일정을 겹치지 않는 줄(레인)로 나눠 막대로 그립니다
+  function spanBars(occs, ws) {
+    const we = addDays(ws, 6), seen = new Set(), items = [];
+    for (const o of occs) {
+      if (!isSpan(o.t) || seen.has(o.t.id)) continue;
+      seen.add(o.t.id);
+      const s = o.t.date > ws ? o.t.date : ws, e = endOf(o.t) < we ? endOf(o.t) : we;
+      items.push({ o, s, e, c: dayDiff(ws, s), len: dayDiff(s, e) + 1 });
+    }
+    items.sort((a, b) => a.c - b.c || b.len - a.len);
+    const laneEnd = [];
+    let html = '';
+    for (const it of items) {
+      let lane = laneEnd.findIndex(x => x < it.c);
+      if (lane < 0) lane = laneEnd.length;
+      laneEnd[lane] = it.c + it.len - 1;
+      const t = it.o.t, contL = t.date < ws, contR = endOf(t) > we;
+      html += `<button class="bar ${esc(t.priority)} ${it.o.done ? 'done' : ''} ${contL ? 'cont-l' : ''} ${contR ? 'cont-r' : ''}" style="grid-column:${it.c + 1} / span ${it.len};grid-row:${lane + 1}" data-act="detail" data-id="${esc(t.id)}" data-date="${it.s}" title="${esc(t.title)} · ${spanLabel(t)} (${spanLen(t)}일간)">${!contL && t.time ? `<span class="bt">${esc(t.time)}</span>` : ''}${esc(t.title)}</button>`;
+    }
+    return { html, lanes: laneEnd.length };
   }
 
   function renderMonth() {
@@ -525,47 +589,60 @@ body { font-size: clamp(14px, 0.35vw + 9px, 16px) }
     const last = ymd(new Date(c.getFullYear(), c.getMonth() + 1, 0));
     const start = S.top;
     const end = monthEnd();
-    const map = byDate(occRange(start, end));
+    const all = occRange(start, end);
+    const map = byDate(all);
     const t = today();
-    let cells = '';
-    for (let d = start; d <= end; d = addDays(d, 1)) {
-      const occs = map[d] || [];
-      const r = ratio(occs);
-      const dw = parse(d).getDay();
-      const cls = ['cell', d < first || d > last ? 'out' : '', d === t ? 'today' : '', d === S.sel ? 'sel' : '', dw === 0 ? 'sun' : '', dw === 6 ? 'sat' : '', hol(d) ? 'hol' : ''].join(' ');
-      cells += `<button class="${cls}" data-act="pick" data-date="${d}" title="두 번 누르면 할 일 추가" aria-label="${fmtDay(d)}${hol(d) ? ' ' + hol(d) : ''}, 할 일 ${occs.length}개">
-        <span class="chead"><span class="dnum num">${parse(d).getDate()}</span>${hol(d) ? `<span class="holname" title="${hol(d)}">${hol(d)}</span>` : ''}</span>
-        <span class="chips">${occs.slice(0, chipCap).map(o => `<span class="chip ${esc(o.t.priority)} ${o.done ? 'done' : ''}" data-act="detail" data-id="${esc(o.t.id)}" data-date="${d}" title="${esc(o.t.title)} · 눌러서 자세히 보기">${o.t.time ? esc(o.t.time) + ' ' : ''}${esc(o.t.title)}</span>`).join('')}</span>
-        ${occs.length > chipCap ? `<span class="more">+${occs.length - chipCap}개 더</span>` : ''}
-        <span class="dots">${occs.slice(0, 6).map(o => `<i class="${esc(o.t.priority)} ${o.done ? 'done' : ''}"></i>`).join('')}</span>
-        ${occs.length ? meter(r.p) : ''}
-      </button>`;
+    let rows = '';
+    for (let w = 0; w < S.weeks; w++) {
+      const ws = addDays(start, w * 7);
+      const bars = spanBars(all.filter(o => o.date >= ws && o.date <= addDays(ws, 6)), ws);
+      const cap = Math.max(1, Math.min(6, Math.floor((cellH - 44 - bars.lanes * 22) / 22)));
+      let cells = '';
+      for (let i = 0; i < 7; i++) {
+        const d = addDays(ws, i);
+        const occs = map[d] || [];
+        const singles = occs.filter(o => !isSpan(o.t));
+        const r = ratio(occs);
+        const dw = parse(d).getDay();
+        const cls = ['cell', d < first || d > last ? 'out' : '', d === t ? 'today' : '', d === S.sel ? 'sel' : '', dw === 0 ? 'sun' : '', dw === 6 ? 'sat' : '', hol(d) ? 'hol' : ''].join(' ');
+        cells += `<button class="${cls}" data-act="pick" data-date="${d}" title="두 번 누르면 할 일 추가" aria-label="${fmtDay(d)}${hol(d) ? ' ' + hol(d) : ''}, 할 일 ${occs.length}개">
+          <span class="chead"><span class="dnum num">${parse(d).getDate()}</span>${hol(d) ? `<span class="holname" title="${hol(d)}">${hol(d)}</span>` : ''}</span>
+          <span class="chips">${singles.slice(0, cap).map(o => `<span class="chip ${esc(o.t.priority)} ${o.done ? 'done' : ''}" data-act="detail" data-id="${esc(o.t.id)}" data-date="${d}" title="${esc(o.t.title)} · 눌러서 자세히 보기">${o.t.time ? esc(o.t.time) + ' ' : ''}${esc(o.t.title)}</span>`).join('')}</span>
+          ${singles.length > cap ? `<span class="more">+${singles.length - cap}개 더</span>` : ''}
+          <span class="dots">${singles.slice(0, 6).map(o => `<i class="${esc(o.t.priority)} ${o.done ? 'done' : ''}"></i>`).join('')}</span>
+          ${occs.length ? meter(r.p) : ''}
+        </button>`;
+      }
+      rows += `<div class="wk" style="--lanes:${bars.lanes}"><div class="wkcells">${cells}</div>${bars.html ? `<div class="bars">${bars.html}</div>` : ''}</div>`;
     }
     return `<div class="month">
         <div class="grid7">${DOW.map((x, i) => `<div class="dow ${i === 0 ? 'sun' : i === 6 ? 'sat' : ''}">${x}</div>`).join('')}</div>
-        <div class="grid7 days">${cells}</div>
+        <div class="days">${rows}</div>
       </div>`;
   }
 
   function renderWeek() {
     const ws = weekStart(S.cursor);
-    const map = byDate(occRange(ws, addDays(ws, 6)));
+    const all = occRange(ws, addDays(ws, 6));
+    const map = byDate(all);
+    const bars = spanBars(all, ws);
     const t = today();
     let cols = '';
     for (let i = 0; i < 7; i++) {
       const d = addDays(ws, i);
       const occs = map[d] || [];
+      const singles = occs.filter(o => !isSpan(o.t));
       const r = ratio(occs);
       cols += `<div data-date="${d}" class="wcol ${d === t ? 'today' : ''} ${d === S.sel ? 'sel' : ''} ${i === 0 ? 'sun' : i === 6 ? 'sat' : ''} ${hol(d) ? 'hol' : ''}">
         <div class="whead"><span class="d">${DOW[i]}<small class="num">${parse(d).getMonth() + 1}/${parse(d).getDate()}</small></span>
           <span class="num" style="font-size:12px;color:var(--muted)">${occs.length ? `${r.d}/${r.n}` : ''}</span></div>
         ${hol(d) ? `<span class="holname">${hol(d)}</span>` : ''}
         ${occs.length ? meter(r.p) : ''}
-        ${occs.length ? taskList(occs, { detail: true }) : ''}
+        ${singles.length ? taskList(singles, { detail: true }) : ''}
         <button class="wadd" data-act="new" data-date="${d}" aria-label="${fmtDay(d)}에 할 일 추가">+ 추가</button>
       </div>`;
     }
-    return `<div class="week">${cols}</div>`;
+    return `<div class="weekwrap">${bars.html ? `<div class="bars wbars">${bars.html}</div>` : ''}<div class="week">${cols}</div></div>`;
   }
 
   function calTitle() {
@@ -596,7 +673,7 @@ body { font-size: clamp(14px, 0.35vw + 9px, 16px) }
     let html = `<section class="panel selday" aria-label="선택한 날의 할 일">
         <div class="panel-h"><h3>${S.sel === t ? '오늘 · ' : ''}${fmtDay(S.sel)}${hol(S.sel) ? ` <span class="holname">${hol(S.sel)}</span>` : ''}<span class="cnt num">${sel.length ? `${sr.d}/${sr.n} 완료` : ''}</span></h3>
           <button class="btn sm" data-act="new" data-date="${S.sel}">+ 추가</button></div>
-        ${sel.length ? meter(sr.p) + taskList(sel, { detail: true }) : emptyHint() || `<p class="empty">이 날은 할 일이 없습니다. 달력에서 날짜를 두 번 누르거나 “+ 추가”를 누르세요.</p>`}
+        ${sel.length ? meter(sr.p) + taskList(sel, { detail: true, progress: true }) : emptyHint() || `<p class="empty">이 날은 할 일이 없습니다. 달력에서 날짜를 두 번 누르거나 “+ 추가”를 누르세요.</p>`}
       </section>`;
     const od = overdue();
     if (od.length) {
@@ -604,9 +681,9 @@ body { font-size: clamp(14px, 0.35vw + 9px, 16px) }
         <button class="btn sm" data-act="carryall" style="margin-left:auto">모두 오늘로</button></h3>
         ${taskList(od, { showDate: true, carry: true, detail: true })}</section>`;
     }
-    const futureMax = S.tasks.reduce((m, x) => !x.repeat && x.date > m ? x.date : m, addDays(t, 30));
+    const futureMax = S.tasks.reduce((m, x) => !x.repeat && endOf(x) > m ? endOf(x) : m, addDays(t, 30));
     const from = S.showPast ? addDays(t, -30) : t;
-    const map = byDate(occRange(from, futureMax).filter(o => o.date !== S.sel && (o.date >= t || o.t.repeat || o.done)));
+    const map = byDate(occRange(from, futureMax).filter(o => o.date !== S.sel && (o.date >= t || o.t.repeat || o.done) && (!isSpan(o.t) || o.date === (o.t.date > from ? o.t.date : from))));
     const days = Object.keys(map).sort();
     html += `<section class="panel upcoming"><h3 class="side-h">${S.showPast ? '지난 기록과 다가오는 일정' : '다가오는 일정'}</h3>`;
     if (!days.length) html += `<p class="empty">${S.status === 'loading' ? '불러오는 중입니다…' : '앞으로 30일 동안 다른 일정이 없습니다.'}</p>`;
@@ -656,13 +733,15 @@ body { font-size: clamp(14px, 0.35vw + 9px, 16px) }
       <h2>${t ? '할 일 수정' : '새 할 일'}</h2>
       <label class="field"><span>제목</span><input id="f-title" required maxlength="120" value="${esc(v.title)}" placeholder="예: 주간 보고서 제출"></label>
       <div class="row2">
-        <label class="field"><span>날짜</span><input id="f-date" type="date" required value="${esc(v.date)}"></label>
-        <label class="field"><span>시간 (선택)</span><input id="f-time" type="text" inputmode="numeric" maxlength="5" autocomplete="off" placeholder="예: 14:30" value="${esc(v.time || '')}"></label>
+        <label class="field"><span>시작 날짜</span><input id="f-date" type="date" required value="${esc(v.date)}"></label>
+        <label class="field"><span>끝나는 날짜 (선택)<span class="dur" id="f-dur"></span></span><input id="f-end" type="date" value="${esc(v.endDate && v.endDate > v.date ? v.endDate : '')}"></label>
       </div>
+      <p class="hint" id="f-endhint">끝나는 날짜를 비워 두면 시작 날짜 하루짜리 할 일이 됩니다.</p>
       <div class="row2">
-        <label class="field"><span>알림 시간 (비우면 할 일 시간에 알림)</span><input id="f-alarm" type="text" inputmode="numeric" maxlength="5" autocomplete="off" placeholder="예: 08:50" value="${esc(v.alarm || '')}"></label>
-        <label class="checkrow"><input id="f-alarmoff" type="checkbox" ${v.alarmOff ? 'checked' : ''}> 알림 받지 않기</label>
+        <label class="field"><span>시간 (선택)</span><input id="f-time" type="text" inputmode="numeric" maxlength="5" autocomplete="off" placeholder="예: 14:30" value="${esc(v.time || '')}"></label>
+        <label class="field"><span>알림 시간 (비우면 할 일 시간)</span><input id="f-alarm" type="text" inputmode="numeric" maxlength="5" autocomplete="off" placeholder="예: 08:50" value="${esc(v.alarm || '')}"></label>
       </div>
+      <label class="checkrow"><input id="f-alarmoff" type="checkbox" ${v.alarmOff ? 'checked' : ''}> 알림 받지 않기</label>
       <p class="hint">알림은 이 페이지가 열려 있는 기기의 화면에 뜹니다.</p>
       <div class="field"><span>우선순위</span><div class="prisel">
         ${['high', 'mid', 'low'].map(p => `<label><input type="radio" name="pri" id="f-pri-${p}" value="${p}" ${v.priority === p ? 'checked' : ''}><span class="pri ${p}"></span>${PRI[p]}</label>`).join('')}
@@ -671,7 +750,7 @@ body { font-size: clamp(14px, 0.35vw + 9px, 16px) }
         <label class="field"><span>카테고리</span><select id="f-cat2"><option value="">없음</option>${catOpts.map(n => `<option ${n === v.category ? 'selected' : ''}>${esc(n)}</option>`).join('')}</select></label>
         <label class="field"><span>반복</span><select id="f-repeat">${Object.entries(REPEAT).map(([k, l]) => `<option value="${k}" ${(v.repeat?.freq || '') === k ? 'selected' : ''}>${l}</option>`).join('')}</select></label>
       </div>
-      <label class="field" id="untilwrap" ${v.repeat ? '' : 'hidden'}><span>반복 종료일 (선택)</span><input id="f-until" type="date" value="${esc(v.repeat?.until || '')}"></label>
+      <label class="field" id="untilwrap" ${v.repeat ? '' : 'hidden'}><span>반복 그만할 날 (선택)</span><input id="f-until" type="date" value="${esc(v.repeat?.until || '')}"></label>
       <label class="field"><span>메모 (선택)</span><textarea id="f-memo" maxlength="2000">${esc(v.memo || '')}</textarea></label>
       ${t?.repeat ? `<p class="hint">반복 일정입니다. 저장하거나 삭제하면 모든 회차에 적용됩니다.</p>` : ''}
       <p class="hint" id="f-err" hidden style="color:var(--hi)"></p>
@@ -680,7 +759,18 @@ body { font-size: clamp(14px, 0.35vw + 9px, 16px) }
         <div class="r"><button type="button" class="btn" data-act="close">취소</button><button class="btn primary" type="submit">저장</button></div>
       </div></div></form>`, m => {
       $('#f-title', m).focus();
-      $('#f-repeat', m).addEventListener('change', e => { $('#untilwrap', m).hidden = !e.target.value; });
+      // 끝나는 날짜와 반복은 같이 쓰지 않습니다: 하나를 정하면 다른 하나가 꺼집니다
+      const syncDates = () => {
+        const st = $('#f-date', m).value, en = $('#f-end', m).value, rp = $('#f-repeat', m).value;
+        $('#f-repeat', m).disabled = !!en;
+        $('#f-end', m).disabled = !!rp;
+        $('#untilwrap', m).hidden = !rp;
+        $('#f-endhint', m).textContent = rp ? '반복 일정에는 끝나는 날짜를 정할 수 없습니다. 반복을 "반복 안 함"으로 바꾸면 쓸 수 있습니다.'
+          : en ? '기간 전체에 한 번만 완료 체크합니다. 시간과 알림은 시작 날짜 기준입니다.' : '끝나는 날짜를 비워 두면 시작 날짜 하루짜리 할 일이 됩니다.';
+        $('#f-dur', m).textContent = st && en ? (en < st ? '시작보다 빠름' : `${dayDiff(st, en) + 1}일간`) : '';
+      };
+      for (const id of ['#f-date', '#f-end', '#f-repeat']) { $(id, m).addEventListener('input', syncDates); $(id, m).addEventListener('change', syncDates); }
+      syncDates();
       const del = $('#delbtn', m);
       if (del) del.addEventListener('click', async () => {
         if (!del.classList.contains('armed')) { del.classList.add('armed'); del.textContent = '한 번 더 누르면 삭제'; return; }
@@ -694,13 +784,15 @@ body { font-size: clamp(14px, 0.35vw + 9px, 16px) }
         if (!dt) return showErr(m, '날짜를 선택해 주세요.');
         if (!S.db) return showErr(m, '저장소에 연결되지 않아 저장할 수 없습니다.');
         const freq = $('#f-repeat', m).value, until = $('#f-until', m).value;
-        if (freq && until && until < dt) return showErr(m, '반복 종료일은 시작 날짜보다 뒤여야 합니다.');
+        if (freq && until && until < dt) return showErr(m, '반복 그만할 날은 시작 날짜보다 뒤여야 합니다.');
+        const fend = freq ? '' : $('#f-end', m).value;
+        if (fend && fend < dt) { $('#f-end', m).focus(); return showErr(m, '끝나는 날짜는 시작 날짜와 같거나 뒤여야 합니다.'); }
         const ftime = normTime($('#f-time', m).value);
         if (ftime === null) { $('#f-time', m).focus(); return showErr(m, TIME_ERR); }
         const falarm = normTime($('#f-alarm', m).value);
         if (falarm === null) { $('#f-alarm', m).focus(); return showErr(m, TIME_ERR); }
         const body = {
-          title, date: dt, time: ftime, alarm: falarm, alarmOff: $('#f-alarmoff', m).checked,
+          title, date: dt, endDate: fend && fend > dt ? fend : '', time: ftime, alarm: falarm, alarmOff: $('#f-alarmoff', m).checked,
           priority: (m.querySelector('input[name="pri"]:checked') || {}).value || 'mid',
           category: $('#f-cat2', m).value, memo: $('#f-memo', m).value.trim(),
           repeat: freq ? { freq, until: until || null } : null,
@@ -786,7 +878,11 @@ body { font-size: clamp(14px, 0.35vw + 9px, 16px) }
     if (!S.db || !date || !ids.length) return;
     const body = time === undefined ? { date } : { date, time };
     let ok = 0;
-    for (const id of ids) { try { await S.db.collection('tasks').doc(id).update(body); ok++; } catch {} }
+    for (const id of ids) {
+      const t = S.tasks.find(x => x.id === id);
+      const b = t && isSpan(t) ? { ...body, endDate: addDays(date, spanLen(t) - 1) } : body;
+      try { await S.db.collection('tasks').doc(id).update(b); ok++; } catch {}
+    }
     const where = (date === today() ? '오늘' : fmtDay(date)) + (time ? ` ${time}` : '');
     if (ok < ids.length) return toast(ok ? `${ids.length}개 중 ${ok}개만 옮겼습니다` : '옮기지 못했습니다');
     toast(ids.length > 1 ? `${ids.length}개를 ${where}로 옮겼습니다` : `${where}로 옮겼습니다`);
@@ -919,7 +1015,7 @@ body { font-size: clamp(14px, 0.35vw + 9px, 16px) }
     let rang = false;
     for (const o of occRange(addDays(t, -1), t, false)) {
       const at = alarmAt(o.t);
-      if (!at || o.done) continue;
+      if (!at || o.done || o.date !== o.t.date && isSpan(o.t)) continue;
       const key = `${o.t.id}|${o.date}|${at}`;
       if (shown.has(key) || (fired.has(key) && !(key in snoozed))) continue;
       const due = snoozed[key] ?? parse(o.date).setHours(+at.slice(0, 2), +at.slice(3, 5), 0, 0);
@@ -1025,7 +1121,9 @@ body { font-size: clamp(14px, 0.35vw + 9px, 16px) }
       <p class="dstate ${o.done ? 'done' : ''}">${o.done ? '완료한 일' : '할 일'}</p>
       <h2 class="dtitle"><span class="pri ${esc(t.priority)}"></span><span>${esc(t.title)}</span></h2>
       <dl class="dlist">
-        ${row('날짜', fmtDay(o.date) + (hol(o.date) ? ` <span class="holname">${hol(o.date)}</span>` : ''))}
+        ${row('날짜', isSpan(t)
+          ? `${fmtDay(t.date)} – ${fmtDay(endOf(t))} · ${spanLen(t)}일간${today() >= t.date && today() <= endOf(t) ? ` · <b>오늘 ${dayDiff(t.date, today()) + 1}일째</b>` : ''}`
+          : fmtDay(o.date) + (hol(o.date) ? ` <span class="holname">${hol(o.date)}</span>` : ''))}
         ${row('시간', t.time ? `<span class="mono">${esc(t.time)}</span>` : '정하지 않음')}
         ${row('알림', alarm)}
         ${row('우선순위', `<span class="pri ${esc(t.priority)}"></span> ${PRI[t.priority] || '보통'}`)}
