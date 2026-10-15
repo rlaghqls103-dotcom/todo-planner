@@ -1,0 +1,16 @@
+{
+  "name": "나의 할 일 수첩",
+  "short_name": "할 일 수첩",
+  "description": "달력과 날짜순 리스트로 보는 개인 할 일 관리, 윈도우 팝업 알림 지원",
+  "lang": "ko",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#f4f5f1",
+  "theme_color": "#2d6a5a",
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "icons/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
