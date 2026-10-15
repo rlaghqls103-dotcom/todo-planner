@@ -94,6 +94,7 @@ button { cursor: pointer }
 .month { border-top: 1px solid var(--line); border-left: 1px solid var(--line); background: var(--surface); border-radius: 10px; overflow: hidden }
 .cell { border-right: 1px solid var(--line); border-bottom: 1px solid var(--line); min-height: 104px; padding: 6px; display: flex; flex-direction: column; gap: 4px; text-align: left; background: none; border-top: 0; border-left: 0; min-width: 0 }
 .cell:hover { background: var(--sunk) }
+.cell, .whead { user-select: none; -webkit-user-select: none }
 .cell.out { opacity: .42 }
 .cell.sel { background: var(--accent-soft) }
 .dnum { font-size: 13px; font-weight: 600; width: 24px; height: 24px; display: grid; place-items: center; border-radius: 50% }
@@ -436,7 +437,7 @@ button { cursor: pointer }
       const r = ratio(occs);
       const dw = parse(d).getDay();
       const cls = ['cell', d < first || d > last ? 'out' : '', d === t ? 'today' : '', d === S.sel ? 'sel' : '', dw === 0 ? 'sun' : '', dw === 6 ? 'sat' : '', hol(d) ? 'hol' : ''].join(' ');
-      cells += `<button class="${cls}" data-act="pick" data-date="${d}" aria-label="${fmtDay(d)}${hol(d) ? ' ' + hol(d) : ''}, 할 일 ${occs.length}개">
+      cells += `<button class="${cls}" data-act="pick" data-date="${d}" title="두 번 누르면 할 일 추가" aria-label="${fmtDay(d)}${hol(d) ? ' ' + hol(d) : ''}, 할 일 ${occs.length}개">
         <span class="chead"><span class="dnum num">${parse(d).getDate()}</span>${hol(d) ? `<span class="holname" title="${hol(d)}">${hol(d)}</span>` : ''}</span>
         <span class="chips">${occs.slice(0, 3).map(o => `<span class="chip ${esc(o.t.priority)} ${o.done ? 'done' : ''}">${o.t.time ? esc(o.t.time) + ' ' : ''}${esc(o.t.title)}</span>`).join('')}</span>
         ${occs.length > 3 ? `<span class="more">+${occs.length - 3}개 더</span>` : ''}
@@ -466,7 +467,7 @@ button { cursor: pointer }
       const d = addDays(ws, i);
       const occs = map[d] || [];
       const r = ratio(occs);
-      cols += `<div class="wcol ${d === t ? 'today' : ''} ${i === 0 ? 'sun' : i === 6 ? 'sat' : ''} ${hol(d) ? 'hol' : ''}">
+      cols += `<div data-date="${d}" class="wcol ${d === t ? 'today' : ''} ${i === 0 ? 'sun' : i === 6 ? 'sat' : ''} ${hol(d) ? 'hol' : ''}">
         <div class="whead"><span class="d">${DOW[i]}<small class="num">${parse(d).getMonth() + 1}/${parse(d).getDate()}</small></span>
           <span class="num" style="font-size:12px;color:var(--muted)">${occs.length ? `${r.d}/${r.n}` : ''}</span></div>
         ${hol(d) ? `<span class="holname">${hol(d)}</span>` : ''}
@@ -716,9 +717,22 @@ button { cursor: pointer }
     render();
   }
 
+  // 같은 날짜를 빠르게 두 번 누르면(더블클릭·더블탭) true. 한 번 누를 때마다 화면을 다시 그려서 직접 셉니다.
+  let lastTap = { key: '', t: 0 };
+  function isDouble(key) {
+    const now = Date.now(), dbl = lastTap.key === key && now - lastTap.t < 450;
+    lastTap = dbl ? { key: '', t: 0 } : { key, t: now };
+    return dbl;
+  }
+
   document.addEventListener('click', e => {
     const el = e.target.closest('[data-act]');
-    if (!el) return;
+    if (!el) {
+      // 주간 보기: 빈 곳을 두 번 누르면 그 날에 할 일 추가
+      const col = e.target.closest('.wcol[data-date]');
+      if (col && isDouble('w' + col.dataset.date)) openTask(null, col.dataset.date);
+      return;
+    }
     const act = el.dataset.act;
     const al = el.closest('.alarm');
     if (al) return alarmAction(act, al);
@@ -736,6 +750,7 @@ button { cursor: pointer }
     if (act === 'pickdate' && li) return openMove(li.dataset.id);
     if (act === 'movego') return doMove();
     if (act === 'movecancel') return closeMove();
+    if (act === 'pick' && isDouble(el.dataset.date)) return openTask(null, el.dataset.date);
     if (act === 'pick') { S.sel = el.dataset.date; const d = parse(S.sel), c = parse(S.cursor); if (d.getMonth() !== c.getMonth()) S.cursor = S.sel; return render(); }
     if (act === 'prev') return shift(-1);
     if (act === 'next') return shift(1);
