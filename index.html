@@ -390,6 +390,19 @@ body { font-size: clamp(14px, 0.35vw + 9px, 16px) }
   };
   const busy = new Set();
 
+  // 월간 달력: S.top(첫 줄 일요일)부터 S.weeks주를 보여 줍니다. 휠로 한 주씩 움직입니다.
+  function alignMonth(ds) {
+    const d = parse(ds);
+    const first = ymd(new Date(d.getFullYear(), d.getMonth(), 1));
+    const last = ymd(new Date(d.getFullYear(), d.getMonth() + 1, 0));
+    S.top = weekStart(first);
+    S.weeks = Math.round((parse(weekStart(last)) - parse(S.top)) / 604800000) + 1;
+  }
+  const focusDate = () => addDays(S.top, Math.floor(S.weeks * 7 / 2));
+  const monthEnd = () => addDays(S.top, S.weeks * 7 - 1);
+  const inMonthView = ds => ds >= S.top && ds <= monthEnd();
+  alignMonth(S.cursor);
+
   /* ---------- occurrences ---------- */
   function occursOn(t, ds) {
     if (!t.repeat) return t.date === ds;
@@ -507,11 +520,11 @@ body { font-size: clamp(14px, 0.35vw + 9px, 16px) }
   }
 
   function renderMonth() {
-    const c = parse(S.cursor);
+    const c = parse(focusDate());
     const first = ymd(new Date(c.getFullYear(), c.getMonth(), 1));
     const last = ymd(new Date(c.getFullYear(), c.getMonth() + 1, 0));
-    const start = weekStart(first);
-    const end = addDays(weekStart(last), 6);
+    const start = S.top;
+    const end = monthEnd();
     const map = byDate(occRange(start, end));
     const t = today();
     let cells = '';
@@ -556,7 +569,7 @@ body { font-size: clamp(14px, 0.35vw + 9px, 16px) }
   }
 
   function calTitle() {
-    const c = parse(S.cursor);
+    const c = parse(S.calView === 'month' ? focusDate() : S.cursor);
     if (S.calView === 'month') return `${c.getFullYear()}년 ${c.getMonth() + 1}월`;
     const ws = weekStart(S.cursor), we = addDays(ws, 6);
     const a = parse(ws), b = parse(we);
@@ -700,7 +713,7 @@ body { font-size: clamp(14px, 0.35vw + 9px, 16px) }
             await S.db.collection('tasks').doc().set({ ...body, done: false, doneAt: null, doneDates: [], createdAt: new Date().toISOString() });
           }
           closeModal(); toast(t ? '수정했습니다' : '추가했습니다');
-          if (!t) { S.sel = dt; S.cursor = dt; render(); }
+          if (!t) { S.sel = dt; S.cursor = dt; if (!inMonthView(dt)) alignMonth(dt); render(); }
         } catch (err) { showErr(m, err); }
       });
     });
@@ -797,7 +810,7 @@ body { font-size: clamp(14px, 0.35vw + 9px, 16px) }
   }
   function shift(dir) {
     const c = parse(S.cursor);
-    if (S.calView === 'month') S.cursor = ymd(new Date(c.getFullYear(), c.getMonth() + dir, 1));
+    if (S.calView === 'month') { const f = parse(focusDate()); alignMonth(ymd(new Date(f.getFullYear(), f.getMonth() + dir, 1))); }
     else S.cursor = addDays(S.cursor, 7 * dir);
     render();
   }
@@ -844,11 +857,11 @@ body { font-size: clamp(14px, 0.35vw + 9px, 16px) }
     if (act === 'movego') return doMove();
     if (act === 'movecancel') return closeMove();
     if (act === 'pick' && isDouble(el.dataset.date)) return openTask(null, el.dataset.date);
-    if (act === 'pick') { S.sel = el.dataset.date; const d = parse(S.sel), c = parse(S.cursor); if (d.getMonth() !== c.getMonth() || d.getFullYear() !== c.getFullYear() || (S.calView === 'week' && weekStart(S.sel) !== weekStart(S.cursor))) S.cursor = S.sel; return render(); }
+    if (act === 'pick') { S.sel = el.dataset.date; const d = parse(S.sel), c = parse(S.cursor); if (d.getMonth() !== c.getMonth() || d.getFullYear() !== c.getFullYear() || (S.calView === 'week' && weekStart(S.sel) !== weekStart(S.cursor))) S.cursor = S.sel; if (!inMonthView(S.sel)) alignMonth(S.sel); return render(); }
     if (act === 'prev') return shift(-1);
     if (act === 'next') return shift(1);
-    if (act === 'gotoday') { S.cursor = S.sel = today(); return render(); }
-    if (act === 'calview') { S.calView = el.dataset.v; store.set('todo.calView', S.calView); S.cursor = S.sel; return render(); }
+    if (act === 'gotoday') { S.cursor = S.sel = today(); alignMonth(S.sel); return render(); }
+    if (act === 'calview') { S.calView = el.dataset.v; store.set('todo.calView', S.calView); S.cursor = S.sel; alignMonth(S.sel); return render(); }
     if (act === 'past') { S.showPast = !S.showPast; return render(); }
     if (act === 'side') { S.sideOpen = !S.sideOpen; store.set('todo.side', S.sideOpen ? '1' : '0'); return render(); }
   });
@@ -867,6 +880,25 @@ body { font-size: clamp(14px, 0.35vw + 9px, 16px) }
     if (t !== null) e.target.value = t;
     if (e.target.id === 'm-time') S.movingTime = e.target.value;
   });
+
+  // 월간 달력 위에서 휠: 아래로 한 주 뒤, 위로 한 주 앞 (터치패드의 작은 값은 모아서 처리)
+  let wheelAcc = 0, wheelT = 0;
+  $('#view').addEventListener('wheel', e => {
+    if (S.calView !== 'month' || e.ctrlKey) return;
+    e.preventDefault();
+    const dy = e.deltaMode === 1 ? e.deltaY * 30 : e.deltaMode === 2 ? e.deltaY * 300 : e.deltaY;
+    if (Math.sign(dy) !== Math.sign(wheelAcc)) wheelAcc = 0;
+    wheelAcc += dy;
+    if (Math.abs(wheelAcc) < 60) return;
+    const now = Date.now();
+    if (now - wheelT < 120) { wheelAcc = 0; return; }
+    wheelT = now;
+    const dir = wheelAcc > 0 ? 1 : -1;
+    wheelAcc = 0;
+    S.top = addDays(S.top, 7 * dir);
+    S.weeks = 5;
+    render();
+  }, { passive: false });
 
   let qT;
   $('#f-q').addEventListener('input', e => { clearTimeout(qT); qT = setTimeout(() => { S.q = e.target.value.trim(); render(); }, 150); });
