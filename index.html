@@ -296,6 +296,35 @@ body { font-size: clamp(14px, 0.35vw + 9px, 16px) }
   .cell .dots { margin-top: calc(var(--lanes, 0) * 8px) }
 }
 
+/* ===== 날짜 고르기 달력 ===== */
+.dpbox { display: flex; align-items: center; gap: 6px; min-width: 0 }
+.dpbox input { flex: 1 1 auto; min-width: 0; width: 100% }
+.dpwd { flex: none; min-width: 2.2em; font-size: 12px; color: var(--muted) }
+.dp { position: fixed; z-index: 40; width: 286px; max-width: calc(100vw - 16px); background: var(--surface); color: var(--ink); border: 1px solid var(--line); border-radius: 12px; box-shadow: var(--shadow); padding: 10px; display: grid; gap: 6px; font-size: 13px }
+.dph { display: flex; align-items: center; justify-content: space-between }
+.dph b { font-weight: 600 }
+.dph button { border: 0; background: none; width: 32px; height: 30px; border-radius: 8px; font-size: 18px; line-height: 1 }
+.dph button:hover { background: var(--sunk) }
+.dpw, .dpg { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 2px 0; text-align: center }
+.dpw span { font-size: 11px; color: var(--muted); padding: 2px 0 }
+.dp .red { color: var(--sun) } .dp .blue { color: var(--sat) }
+.dpd { position: relative; border: 0; background: none; height: 34px; border-radius: 8px; padding: 0; font-variant-numeric: tabular-nums; display: flex; flex-direction: column; align-items: center; justify-content: center; line-height: 1.1 }
+.dpd:hover:not(:disabled) { background: var(--sunk) }
+.dpd.out { opacity: .45 }
+.dpd.hol::after { content: ""; position: absolute; bottom: 3px; left: 50%; width: 4px; height: 4px; margin-left: -2px; border-radius: 50%; background: var(--sun) }
+.dpd.today { box-shadow: inset 0 0 0 1px var(--muted) }
+.dpd.rng { background: var(--accent-soft); border-radius: 0 }
+.dpd.anc { box-shadow: inset 0 0 0 2px var(--accent); font-weight: 600 }
+.dpd small { font-size: 9px; color: var(--accent); font-weight: 600 }
+.dpd.sel { background: var(--accent); color: var(--accent-ink); font-weight: 600 }
+.dpd.sel small { color: var(--accent-ink) }
+.dpd.sel.hol::after { background: var(--accent-ink) }
+.dpd:disabled { opacity: .28; cursor: not-allowed }
+.dpf { display: flex; gap: 6px; align-items: center; border-top: 1px solid var(--line); padding-top: 6px }
+.dpa { color: var(--accent); font-size: 12px; font-weight: 600 }
+.field.isanchor input { border-color: var(--accent); background: var(--accent-soft); box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 30%, transparent) }
+.field.isanchor > span:first-child::after { content: "시작"; margin-left: 6px; font-size: 11px; color: var(--accent-ink); background: var(--accent); border-radius: 999px; padding: 0 7px; letter-spacing: 0 }
+
 @media (max-width: 760px) {
   .week { grid-template-columns: minmax(0, 1fr) }
   .wcol { min-height: 0 }
@@ -512,7 +541,7 @@ body { font-size: clamp(14px, 0.35vw + 9px, 16px) }
       </button>
       ${opt.carry ? `<span class="tact"><button class="btn sm" data-act="carry">오늘로</button><button class="btn sm" data-act="pickdate" aria-expanded="${S.moving === t.id}">다른 날로</button></span>` : ''}
       ${opt.carry && S.moving === t.id ? `<div class="moverow">
-        <label class="field"><span>옮길 날짜</span><input id="m-date" type="date" value="${esc(S.movingDate)}"></label>
+        <label class="field"><span>옮길 날짜</span><span class="dpbox"><input id="m-date" class="dpk" type="text" inputmode="numeric" autocomplete="off" placeholder="YYYY-MM-DD" value="${esc(S.movingDate)}"><span class="dpwd"></span></span></label>
         <label class="field"><span>시간 (비우면 시간 없음)</span><input id="m-time" type="text" inputmode="numeric" maxlength="5" autocomplete="off" placeholder="예: 14:30" value="${esc(S.movingTime)}"></label>
         <button class="btn sm primary" data-act="movego">옮기기</button>
         <button class="btn sm" data-act="movecancel">취소</button>
@@ -714,6 +743,7 @@ body { font-size: clamp(14px, 0.35vw + 9px, 16px) }
     $('#view').innerHTML = renderBody();
     $('#side').innerHTML = S.sideOpen ? renderSide() : '';
     if (S.calView === 'month' && updateCap()) $('#view').innerHTML = renderBody();
+    refreshWd($('#side'));
   }
   let resizeT;
   window.addEventListener('resize', () => { clearTimeout(resizeT); resizeT = setTimeout(() => { if (updateCap()) render(); }, 150); });
@@ -755,7 +785,7 @@ body { font-size: clamp(14px, 0.35vw + 9px, 16px) }
     };
     onMount?.(modal);
   }
-  function closeModal(animate = true) { if (modalClose) { const f = modalClose; modalClose = null; f(animate); } }
+  function closeModal(animate = true) { dpClose(); if (modalClose) { const f = modalClose; modalClose = null; f(animate); } }
 
   function openTask(id, date) {
     const t = id ? S.tasks.find(x => x.id === id) : null;
@@ -766,8 +796,8 @@ body { font-size: clamp(14px, 0.35vw + 9px, 16px) }
       <h2>${t ? '할 일 수정' : '새 할 일'}</h2>
       <label class="field"><span>제목</span><input id="f-title" required maxlength="120" value="${esc(v.title)}" placeholder="예: 주간 보고서 제출"></label>
       <div class="row2">
-        <label class="field"><span>시작 날짜</span><input id="f-date" type="date" required value="${esc(v.date)}"></label>
-        <label class="field"><span>끝나는 날짜 (선택)<span class="dur" id="f-dur"></span></span><input id="f-end" type="date" value="${esc(v.endDate && v.endDate > v.date ? v.endDate : '')}"></label>
+        <label class="field"><span>시작 날짜</span><span class="dpbox"><input id="f-date" class="dpk" type="text" inputmode="numeric" autocomplete="off" placeholder="YYYY-MM-DD" required value="${esc(v.date)}"><span class="dpwd"></span></span></label>
+        <label class="field"><span>끝나는 날짜 (선택)<span class="dur" id="f-dur"></span></span><span class="dpbox"><input id="f-end" class="dpk" type="text" inputmode="numeric" autocomplete="off" placeholder="YYYY-MM-DD" data-anchor="#f-date" data-clear="1" min="${esc(v.date)}" value="${esc(v.endDate && v.endDate > v.date ? v.endDate : '')}"><span class="dpwd"></span></span></label>
       </div>
       <p class="hint" id="f-endhint">끝나는 날짜를 비워 두면 시작 날짜 하루짜리 할 일이 됩니다.</p>
       <div class="row2">
@@ -783,7 +813,7 @@ body { font-size: clamp(14px, 0.35vw + 9px, 16px) }
         <label class="field"><span>카테고리</span><select id="f-cat2"><option value="">없음</option>${catOpts.map(n => `<option ${n === v.category ? 'selected' : ''}>${esc(n)}</option>`).join('')}</select></label>
         <label class="field"><span>반복</span><select id="f-repeat">${Object.entries(REPEAT).map(([k, l]) => `<option value="${k}" ${(v.repeat?.freq || '') === k ? 'selected' : ''}>${l}</option>`).join('')}</select></label>
       </div>
-      <label class="field" id="untilwrap" ${v.repeat ? '' : 'hidden'}><span>반복 그만할 날 (선택)</span><input id="f-until" type="date" value="${esc(v.repeat?.until || '')}"></label>
+      <label class="field" id="untilwrap" ${v.repeat ? '' : 'hidden'}><span>반복 그만할 날 (선택)</span><span class="dpbox"><input id="f-until" class="dpk" type="text" inputmode="numeric" autocomplete="off" placeholder="YYYY-MM-DD" data-anchor="#f-date" data-clear="1" min="${esc(v.date)}" value="${esc(v.repeat?.until || '')}"><span class="dpwd"></span></span></label>
       <label class="field"><span>메모 (선택)</span><textarea id="f-memo" maxlength="2000">${esc(v.memo || '')}</textarea></label>
       ${t?.repeat ? `<p class="hint">반복 일정입니다. 저장하거나 삭제하면 모든 회차에 적용됩니다.</p>` : ''}
       <p class="hint" id="f-err" hidden style="color:var(--hi)"></p>
@@ -793,14 +823,24 @@ body { font-size: clamp(14px, 0.35vw + 9px, 16px) }
       </div></div></form>`, m => {
       $('#f-title', m).focus();
       // 끝나는 날짜와 반복은 같이 쓰지 않습니다: 하나를 정하면 다른 하나가 꺼집니다
+      let prevStart = v.date;
       const syncDates = () => {
-        const st = $('#f-date', m).value, en = $('#f-end', m).value, rp = $('#f-repeat', m).value;
+        const st = $('#f-date', m).value, rp = $('#f-repeat', m).value;
+        let en = $('#f-end', m).value;
+        if (isDate(st)) {
+          // 시작을 끝보다 뒤로 옮기면 기간 길이를 유지한 채 끝도 함께 밉니다
+          if (isDate(en) && isDate(prevStart) && st !== prevStart && st > en) { en = addDays(en, dayDiff(prevStart, st)); $('#f-end', m).value = en; }
+          prevStart = st;
+          $('#f-end', m).setAttribute('min', st);
+          $('#f-until', m).setAttribute('min', st);
+        }
         $('#f-repeat', m).disabled = !!en;
         $('#f-end', m).disabled = !!rp;
         $('#untilwrap', m).hidden = !rp;
         $('#f-endhint', m).textContent = rp ? '반복 일정에는 끝나는 날짜를 정할 수 없습니다. 반복을 "반복 안 함"으로 바꾸면 쓸 수 있습니다.'
           : en ? '기간 전체에 한 번만 완료 체크합니다. 시간과 알림은 시작 날짜 기준입니다.' : '끝나는 날짜를 비워 두면 시작 날짜 하루짜리 할 일이 됩니다.';
-        $('#f-dur', m).textContent = st && en ? (en < st ? '시작보다 빠름' : `${dayDiff(st, en) + 1}일간`) : '';
+        $('#f-dur', m).textContent = isDate(st) ? `${fmtDay(st)}부터${isDate(en) && en >= st ? (en === st ? ' · 하루' : ` · ${dayDiff(st, en) + 1}일간`) : ''}` : '';
+        refreshWd(m);
       };
       for (const id of ['#f-date', '#f-end', '#f-repeat']) { $(id, m).addEventListener('input', syncDates); $(id, m).addEventListener('change', syncDates); }
       syncDates();
@@ -815,10 +855,13 @@ body { font-size: clamp(14px, 0.35vw + 9px, 16px) }
         const title = $('#f-title', m).value.trim(), dt = $('#f-date', m).value;
         if (!title) return showErr(m, '제목을 입력해 주세요.');
         if (!dt) return showErr(m, '날짜를 선택해 주세요.');
+        if (!isDate(dt)) { $('#f-date', m).focus(); return showErr(m, '시작 날짜를 2026-10-15처럼 입력하거나 달력에서 골라 주세요.'); }
         if (!S.db) return showErr(m, '저장소에 연결되지 않아 저장할 수 없습니다.');
         const freq = $('#f-repeat', m).value, until = $('#f-until', m).value;
         if (freq && until && until < dt) return showErr(m, '반복 그만할 날은 시작 날짜보다 뒤여야 합니다.');
+        if (freq && until && !isDate(until)) return showErr(m, '반복 그만할 날을 2026-10-15처럼 입력하거나 달력에서 골라 주세요.');
         const fend = freq ? '' : $('#f-end', m).value;
+        if (fend && !isDate(fend)) { $('#f-end', m).focus(); return showErr(m, '끝나는 날짜를 2026-10-15처럼 입력하거나 달력에서 골라 주세요.'); }
         if (fend && fend < dt) { $('#f-end', m).focus(); return showErr(m, '끝나는 날짜는 시작 날짜와 같거나 뒤여야 합니다.'); }
         const ftime = normTime($('#f-time', m).value);
         if (ftime === null) { $('#f-time', m).focus(); return showErr(m, TIME_ERR); }
@@ -930,7 +973,7 @@ body { font-size: clamp(14px, 0.35vw + 9px, 16px) }
   function closeMove() { if (!S.moving) return; S.moving = null; render(); }
   function doMove() {
     const d = $('#m-date')?.value;
-    if (!d) { const e = $('#m-err'); if (e) { e.textContent = '옮길 날짜를 골라 주세요.'; e.hidden = false; } return; }
+    if (!isDate(d)) { const e = $('#m-err'); if (e) { e.textContent = '옮길 날짜를 골라 주세요.'; e.hidden = false; } return; }
     const tm = normTime($('#m-time')?.value);
     if (tm === null) { const e = $('#m-err'); if (e) { e.textContent = TIME_ERR; e.hidden = false; } $('#m-time')?.focus(); return; }
     const id = S.moving;
@@ -1183,6 +1226,129 @@ body { font-size: clamp(14px, 0.35vw + 9px, 16px) }
   themeSel.value = store.get('todo.theme', '') || '';
   applyTheme(themeSel.value);
   themeSel.addEventListener('change', e => { store.set('todo.theme', e.target.value); applyTheme(e.target.value); });
+
+  /* ---------- 날짜 고르기 달력 (일요일·공휴일 붉은색, 토요일 파란색) ---------- */
+  const isDate = x => /^\d{4}-\d{2}-\d{2}$/.test(x || '');
+  const wdLabel = s => isDate(s) ? `(${DOW[parse(s).getDay()]})` : '';
+  // "2026-10-20", "20261020", "10/20", "1020" 같은 입력을 YYYY-MM-DD로. 빈 값은 "", 잘못된 값은 null
+  function normDate(v, base) {
+    v = String(v || '').trim();
+    if (!v) return '';
+    let m = v.match(/^(\d{4})[-./ ]?(\d{1,2})[-./ ]?(\d{1,2})$/), y, mo, d;
+    if (m) [y, mo, d] = [+m[1], +m[2], +m[3]];
+    else if ((m = v.match(/^(\d{1,2})[-./ ](\d{1,2})$/) || v.match(/^(\d{2})(\d{2})$/))) [y, mo, d] = [parse(isDate(base) ? base : today()).getFullYear(), +m[1], +m[2]];
+    else return null;
+    const dt = new Date(y, mo - 1, d);
+    return dt.getFullYear() === y && dt.getMonth() === mo - 1 && dt.getDate() === d ? ymd(dt) : null;
+  }
+  function refreshWd(root = document) {
+    root.querySelectorAll?.('input.dpk').forEach(i => { const w = i.parentElement.querySelector('.dpwd'); if (w) w.textContent = wdLabel(i.value); });
+  }
+  let dp = null;
+  function dpOpen(inp) {
+    dpClose();
+    const el = document.createElement('div');
+    el.className = 'dp';
+    el.setAttribute('role', 'dialog');
+    el.setAttribute('aria-label', '날짜 고르기');
+    document.body.appendChild(el);
+    const anchorEl = inp.dataset.anchor ? inp.closest('form, .modal, body').querySelector(inp.dataset.anchor) : null;
+    const anchor = anchorEl && isDate(anchorEl.value) ? anchorEl.value : '';
+    const val = normDate(inp.value);
+    dp = { inp, el, anchor, anchorField: anchorEl?.closest('.field') || null, month: (val || anchor || today()).slice(0, 8) + '01' };
+    dp.anchorField?.classList.add('isanchor');
+    // 달력 안을 눌러도 입력칸의 포커스가 유지되게
+    const keep = e => e.preventDefault();
+    el.addEventListener('pointerdown', keep);
+    el.addEventListener('mousedown', keep);
+    el.addEventListener('click', dpClick);
+    el.addEventListener('wheel', e => { e.preventDefault(); if (Math.abs(e.deltaY) > 4) dpShift(e.deltaY > 0 ? 1 : -1); }, { passive: false });
+    dpRender();
+  }
+  function dpClose() {
+    if (!dp) return;
+    dp.anchorField?.classList.remove('isanchor');
+    dp.el.remove();
+    dp = null;
+  }
+  function dpShift(dir) {
+    const m = parse(dp.month);
+    dp.month = ymd(new Date(m.getFullYear(), m.getMonth() + dir, 1));
+    dpRender();
+  }
+  function dpRender() {
+    const { inp, el, anchor } = dp;
+    const m = parse(dp.month), y = m.getFullYear(), mo = m.getMonth();
+    const first = ymd(new Date(y, mo, 1)), last = ymd(new Date(y, mo + 1, 0));
+    const start = weekStart(first), end = addDays(weekStart(last), 6);
+    const val = normDate(inp.value) || '', min = inp.getAttribute('min') || '', t = today();
+    const lo = anchor && val ? (anchor < val ? anchor : val) : '', hi = anchor && val ? (anchor < val ? val : anchor) : '';
+    let cells = '';
+    for (let d = start; d <= end; d = addDays(d, 1)) {
+      const dw = parse(d).getDay(), h = hol(d), dis = min && d < min;
+      const cls = ['dpd', d < first || d > last ? 'out' : '', dw === 0 || h ? 'red' : dw === 6 ? 'blue' : '', h ? 'hol' : '',
+        d === val ? 'sel' : '', d === t ? 'today' : '', anchor && d === anchor ? 'anc' : '', lo && d > lo && d < hi ? 'rng' : ''].join(' ');
+      cells += `<button type="button" class="${cls}" data-dpd="${d}" ${dis ? 'disabled' : ''} title="${fmtDay(d)}${h ? ' · ' + h : ''}${dis ? ' · 시작 날짜보다 앞이라 고를 수 없음' : ''}">${parse(d).getDate()}${anchor && d === anchor ? '<small>시작</small>' : ''}</button>`;
+    }
+    el.innerHTML = `<div class="dph"><button type="button" data-dpnav="-1" aria-label="이전 달">‹</button><b>${y}년 ${mo + 1}월</b><button type="button" data-dpnav="1" aria-label="다음 달">›</button></div>
+      <div class="dpw">${DOW.map((x, i) => `<span class="${i === 0 ? 'red' : i === 6 ? 'blue' : ''}">${x}</span>`).join('')}</div>
+      <div class="dpg">${cells}</div>
+      <div class="dpf">${anchor ? `<span class="dpa">시작 ${fmtDay(anchor)}</span>` : ''}<span style="margin-left:auto"></span>
+        <button type="button" class="btn sm ghost" data-dptoday>오늘</button>${inp.dataset.clear ? '<button type="button" class="btn sm ghost" data-dpclear>지우기</button>' : ''}</div>`;
+    dpPlace();
+  }
+  function dpPlace() {
+    if (!dp) return;
+    if (!dp.inp.isConnected) return dpClose();
+    const r = dp.inp.getBoundingClientRect(), el = dp.el, w = el.offsetWidth, h = el.offsetHeight;
+    const left = Math.max(8, Math.min(r.left, window.innerWidth - w - 8));
+    const below = r.bottom + 4 + h <= window.innerHeight - 8 || r.top - 4 - h < 8;
+    el.style.left = left + 'px';
+    el.style.top = (below ? r.bottom + 4 : r.top - 4 - h) + 'px';
+  }
+  function dpSet(v) {
+    const inp = dp.inp;
+    inp.value = v;
+    inp.dispatchEvent(new Event('input', { bubbles: true }));
+    inp.dispatchEvent(new Event('change', { bubbles: true }));
+    refreshWd(inp.parentElement);
+    dpClose();
+  }
+  function dpClick(e) {
+    const b = e.target.closest('button');
+    if (!b || b.disabled) return;
+    if (b.dataset.dpd) return dpSet(b.dataset.dpd);
+    if (b.dataset.dpnav) return dpShift(+b.dataset.dpnav);
+    if ('dptoday' in b.dataset) { const min = dp.inp.getAttribute('min'); return dpSet(min && today() < min ? min : today()); }
+    if ('dpclear' in b.dataset) return dpSet('');
+  }
+  // 직접 입력한 날짜를 정리하고, 시작 날짜보다 앞이면 시작 날짜로 맞춥니다
+  function dpNormalize(inp) {
+    const raw = inp.value;
+    let v = normDate(raw, inp.getAttribute('min'));
+    if (v) {
+      const min = inp.getAttribute('min');
+      if (min && v < min) { v = min; toast('시작 날짜보다 앞은 고를 수 없어 시작 날짜로 맞췄습니다', 2600); }
+      if (v !== raw) { inp.value = v; inp.dispatchEvent(new Event('input', { bubbles: true })); inp.dispatchEvent(new Event('change', { bubbles: true })); }
+    }
+    refreshWd(inp.parentElement);
+  }
+  document.addEventListener('focusin', e => { if (e.target.matches?.('input.dpk') && dp?.inp !== e.target) dpOpen(e.target); });
+  document.addEventListener('click', e => { if (e.target.matches?.('input.dpk') && !dp) dpOpen(e.target); });
+  document.addEventListener('pointerdown', e => { if (dp && !dp.el.contains(e.target) && e.target !== dp.inp) dpClose(); }, true);
+  document.addEventListener('focusout', e => { if (e.target.matches?.('input.dpk')) dpNormalize(e.target); });
+  document.addEventListener('keydown', e => {
+    if (!dp) return;
+    if (e.key === 'Escape') { e.preventDefault(); e.stopImmediatePropagation(); dpClose(); }
+    else if (e.key === 'Enter' && e.target === dp.inp) { dpNormalize(dp.inp); dpClose(); }
+  }, true);
+  document.addEventListener('input', e => {
+    if (!e.target.matches?.('input.dpk')) return;
+    refreshWd(e.target.parentElement);
+    if (dp && dp.inp === e.target) { const v = normDate(e.target.value); if (v && e.target.value.replace(/\D/g, '').length >= 8) { dp.month = v.slice(0, 8) + '01'; } dpRender(); }
+  });
+  document.addEventListener('scroll', () => dpPlace(), true);
+  window.addEventListener('resize', () => dpPlace());
 
   /* ---------- boot ---------- */
   renderFilters();
