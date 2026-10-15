@@ -298,7 +298,11 @@ body { font-size: clamp(14px, 0.35vw + 9px, 16px) }
 
 /* ===== 날짜 고르기 달력 ===== */
 .dpbox { display: flex; align-items: center; gap: 6px; min-width: 0 }
-.dpbox input { flex: 1 1 auto; min-width: 0; width: 100% }
+.dpin { position: relative; flex: 1 1 auto; min-width: 0; display: flex }
+.dpbox input { flex: 1 1 auto; min-width: 0; width: 100%; padding-right: 34px !important }
+.dpbtn { position: absolute; right: 4px; top: 50%; transform: translateY(-50%); width: 28px; height: 28px; border: 0; background: none; border-radius: 6px; color: var(--muted); display: grid; place-items: center; padding: 0 }
+.dpbtn:hover { background: var(--sunk); color: var(--accent) }
+.dpk:disabled + .dpbtn { opacity: .4; pointer-events: none }
 .dpwd { flex: none; min-width: 2.2em; font-size: 12px; color: var(--muted) }
 .dp { position: fixed; z-index: 40; width: 286px; max-width: calc(100vw - 16px); background: var(--surface); color: var(--ink); border: 1px solid var(--line); border-radius: 12px; box-shadow: var(--shadow); padding: 10px; display: grid; gap: 6px; font-size: 13px }
 .dph { display: flex; align-items: center; justify-content: space-between }
@@ -541,7 +545,7 @@ body { font-size: clamp(14px, 0.35vw + 9px, 16px) }
       </button>
       ${opt.carry ? `<span class="tact"><button class="btn sm" data-act="carry">오늘로</button><button class="btn sm" data-act="pickdate" aria-expanded="${S.moving === t.id}">다른 날로</button></span>` : ''}
       ${opt.carry && S.moving === t.id ? `<div class="moverow">
-        <label class="field"><span>옮길 날짜</span><span class="dpbox"><input id="m-date" class="dpk" type="text" inputmode="numeric" autocomplete="off" placeholder="YYYY-MM-DD" value="${esc(S.movingDate)}"><span class="dpwd"></span></span></label>
+        <label class="field"><span>옮길 날짜</span><span class="dpbox"><span class="dpin"><input id="m-date" class="dpk" type="text" inputmode="numeric" autocomplete="off" placeholder="YYYY-MM-DD" value="${esc(S.movingDate)}"><button type="button" class="dpbtn" tabindex="-1" aria-label="달력에서 고르기" title="달력에서 고르기"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><rect x="2" y="3" width="12" height="11" rx="2"/><path d="M2 6.5h12M5.5 1.5v3M10.5 1.5v3"/></svg></button></span><span class="dpwd"></span></span></label>
         <label class="field"><span>시간 (비우면 시간 없음)</span><input id="m-time" type="text" inputmode="numeric" maxlength="5" autocomplete="off" placeholder="예: 14:30" value="${esc(S.movingTime)}"></label>
         <button class="btn sm primary" data-act="movego">옮기기</button>
         <button class="btn sm" data-act="movecancel">취소</button>
@@ -796,8 +800,8 @@ body { font-size: clamp(14px, 0.35vw + 9px, 16px) }
       <h2>${t ? '할 일 수정' : '새 할 일'}</h2>
       <label class="field"><span>제목</span><input id="f-title" required maxlength="120" value="${esc(v.title)}" placeholder="예: 주간 보고서 제출"></label>
       <div class="row2">
-        <label class="field"><span>시작 날짜</span><span class="dpbox"><input id="f-date" class="dpk" type="text" inputmode="numeric" autocomplete="off" placeholder="YYYY-MM-DD" required value="${esc(v.date)}"><span class="dpwd"></span></span></label>
-        <label class="field"><span>끝나는 날짜 (선택)<span class="dur" id="f-dur"></span></span><span class="dpbox"><input id="f-end" class="dpk" type="text" inputmode="numeric" autocomplete="off" placeholder="YYYY-MM-DD" data-anchor="#f-date" data-clear="1" min="${esc(v.date)}" value="${esc(v.endDate && v.endDate > v.date ? v.endDate : '')}"><span class="dpwd"></span></span></label>
+        <label class="field"><span>시작 날짜</span><span class="dpbox"><span class="dpin"><input id="f-date" class="dpk" type="text" inputmode="numeric" autocomplete="off" placeholder="YYYY-MM-DD" required value="${esc(v.date)}"><button type="button" class="dpbtn" tabindex="-1" aria-label="달력에서 고르기" title="달력에서 고르기"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><rect x="2" y="3" width="12" height="11" rx="2"/><path d="M2 6.5h12M5.5 1.5v3M10.5 1.5v3"/></svg></button></span><span class="dpwd"></span></span></label>
+        <label class="field"><span>끝나는 날짜 (선택)</span><span class="dpbox"><span class="dpin"><input id="f-end" class="dpk" type="text" inputmode="numeric" autocomplete="off" placeholder="YYYY-MM-DD" data-anchor="#f-date" data-clear="1" min="${esc(v.date)}" value="${esc(v.endDate && v.endDate > v.date ? v.endDate : '')}"><button type="button" class="dpbtn" tabindex="-1" aria-label="달력에서 고르기" title="달력에서 고르기"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><rect x="2" y="3" width="12" height="11" rx="2"/><path d="M2 6.5h12M5.5 1.5v3M10.5 1.5v3"/></svg></button></span><span class="dpwd"></span></span></label>
       </div>
       <p class="hint" id="f-endhint">끝나는 날짜를 비워 두면 시작 날짜 하루짜리 할 일이 됩니다.</p>
       <div class="row2">
@@ -813,7 +817,7 @@ body { font-size: clamp(14px, 0.35vw + 9px, 16px) }
         <label class="field"><span>카테고리</span><select id="f-cat2"><option value="">없음</option>${catOpts.map(n => `<option ${n === v.category ? 'selected' : ''}>${esc(n)}</option>`).join('')}</select></label>
         <label class="field"><span>반복</span><select id="f-repeat">${Object.entries(REPEAT).map(([k, l]) => `<option value="${k}" ${(v.repeat?.freq || '') === k ? 'selected' : ''}>${l}</option>`).join('')}</select></label>
       </div>
-      <label class="field" id="untilwrap" ${v.repeat ? '' : 'hidden'}><span>반복 그만할 날 (선택)</span><span class="dpbox"><input id="f-until" class="dpk" type="text" inputmode="numeric" autocomplete="off" placeholder="YYYY-MM-DD" data-anchor="#f-date" data-clear="1" min="${esc(v.date)}" value="${esc(v.repeat?.until || '')}"><span class="dpwd"></span></span></label>
+      <label class="field" id="untilwrap" ${v.repeat ? '' : 'hidden'}><span>반복 그만할 날 (선택)</span><span class="dpbox"><span class="dpin"><input id="f-until" class="dpk" type="text" inputmode="numeric" autocomplete="off" placeholder="YYYY-MM-DD" data-anchor="#f-date" data-clear="1" min="${esc(v.date)}" value="${esc(v.repeat?.until || '')}"><button type="button" class="dpbtn" tabindex="-1" aria-label="달력에서 고르기" title="달력에서 고르기"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><rect x="2" y="3" width="12" height="11" rx="2"/><path d="M2 6.5h12M5.5 1.5v3M10.5 1.5v3"/></svg></button></span><span class="dpwd"></span></span></label>
       <label class="field"><span>메모 (선택)</span><textarea id="f-memo" maxlength="2000">${esc(v.memo || '')}</textarea></label>
       ${t?.repeat ? `<p class="hint">반복 일정입니다. 저장하거나 삭제하면 모든 회차에 적용됩니다.</p>` : ''}
       <p class="hint" id="f-err" hidden style="color:var(--hi)"></p>
@@ -839,7 +843,6 @@ body { font-size: clamp(14px, 0.35vw + 9px, 16px) }
         $('#untilwrap', m).hidden = !rp;
         $('#f-endhint', m).textContent = rp ? '반복 일정에는 끝나는 날짜를 정할 수 없습니다. 반복을 "반복 안 함"으로 바꾸면 쓸 수 있습니다.'
           : en ? '기간 전체에 한 번만 완료 체크합니다. 시간과 알림은 시작 날짜 기준입니다.' : '끝나는 날짜를 비워 두면 시작 날짜 하루짜리 할 일이 됩니다.';
-        $('#f-dur', m).textContent = isDate(st) ? `${fmtDay(st)}부터${isDate(en) && en >= st ? (en === st ? ' · 하루' : ` · ${dayDiff(st, en) + 1}일간`) : ''}` : '';
         refreshWd(m);
       };
       for (const id of ['#f-date', '#f-end', '#f-repeat']) { $(id, m).addEventListener('input', syncDates); $(id, m).addEventListener('change', syncDates); }
@@ -1242,7 +1245,7 @@ body { font-size: clamp(14px, 0.35vw + 9px, 16px) }
     return dt.getFullYear() === y && dt.getMonth() === mo - 1 && dt.getDate() === d ? ymd(dt) : null;
   }
   function refreshWd(root = document) {
-    root.querySelectorAll?.('input.dpk').forEach(i => { const w = i.parentElement.querySelector('.dpwd'); if (w) w.textContent = wdLabel(i.value); });
+    root.querySelectorAll?.('input.dpk').forEach(i => { const w = i.closest('.dpbox')?.querySelector('.dpwd'); if (w) w.textContent = wdLabel(i.value); });
   }
   let dp = null;
   function dpOpen(inp) {
@@ -1311,7 +1314,7 @@ body { font-size: clamp(14px, 0.35vw + 9px, 16px) }
     inp.value = v;
     inp.dispatchEvent(new Event('input', { bubbles: true }));
     inp.dispatchEvent(new Event('change', { bubbles: true }));
-    refreshWd(inp.parentElement);
+    refreshWd(inp.closest('.dpbox') || document);
     dpClose();
   }
   function dpClick(e) {
@@ -1331,11 +1334,22 @@ body { font-size: clamp(14px, 0.35vw + 9px, 16px) }
       if (min && v < min) { v = min; toast('시작 날짜보다 앞은 고를 수 없어 시작 날짜로 맞췄습니다', 2600); }
       if (v !== raw) { inp.value = v; inp.dispatchEvent(new Event('input', { bubbles: true })); inp.dispatchEvent(new Event('change', { bubbles: true })); }
     }
-    refreshWd(inp.parentElement);
+    refreshWd(inp.closest('.dpbox') || document);
   }
   document.addEventListener('focusin', e => { if (e.target.matches?.('input.dpk') && dp?.inp !== e.target) dpOpen(e.target); });
-  document.addEventListener('click', e => { if (e.target.matches?.('input.dpk') && !dp) dpOpen(e.target); });
-  document.addEventListener('pointerdown', e => { if (dp && !dp.el.contains(e.target) && e.target !== dp.inp) dpClose(); }, true);
+  document.addEventListener('click', e => {
+    const btn = e.target.closest?.('.dpbtn');
+    if (btn) {
+      const inp = btn.parentElement.querySelector('input.dpk');
+      if (!inp || inp.disabled) return;
+      if (dp?.inp === inp) return dpClose();
+      inp.focus();
+      if (dp?.inp !== inp) dpOpen(inp);
+      return;
+    }
+    if (e.target.matches?.('input.dpk') && !dp) dpOpen(e.target);
+  });
+  document.addEventListener('pointerdown', e => { if (dp && !dp.el.contains(e.target) && e.target !== dp.inp && e.target.closest?.('.dpbtn')?.parentElement !== dp.inp.parentElement) dpClose(); }, true);
   document.addEventListener('focusout', e => { if (e.target.matches?.('input.dpk')) dpNormalize(e.target); });
   document.addEventListener('keydown', e => {
     if (!dp) return;
@@ -1344,7 +1358,7 @@ body { font-size: clamp(14px, 0.35vw + 9px, 16px) }
   }, true);
   document.addEventListener('input', e => {
     if (!e.target.matches?.('input.dpk')) return;
-    refreshWd(e.target.parentElement);
+    refreshWd(e.target.closest('.dpbox') || document);
     if (dp && dp.inp === e.target) { const v = normDate(e.target.value); if (v && e.target.value.replace(/\D/g, '').length >= 8) { dp.month = v.slice(0, 8) + '01'; } dpRender(); }
   });
   document.addEventListener('scroll', () => dpPlace(), true);
