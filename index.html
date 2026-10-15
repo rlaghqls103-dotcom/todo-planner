@@ -12,7 +12,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Gowun+Batang:wght@700&family=IBM+Plex+Mono:wght@500&family=IBM+Plex+Sans+KR:wght@400;500;600&display=swap">
 <style>
-/* Layout: 플래너 수첩 — 상단 요약(오늘/이번 주 진행률), 탭 바, 필터 줄, 달력 또는 날짜순 리스트 */
+/* Layout: 플래너 수첩 — 상단 한 줄(제목·진행률·필터·버튼), 아래 달력 4/5 + 할 일 목록 1/5 */
 :root {
   --bg: #f4f5f1; --surface: #ffffff; --sunk: #eceee8; --ink: #1d2420; --muted: #66706a; --line: #dadfd7;
   --accent: #2d6a5a; --accent-ink: #ffffff; --accent-soft: #e0ece7;
@@ -211,6 +211,61 @@ button { cursor: pointer }
 .checkrow { display: flex; align-items: center; gap: 8px; align-self: end; min-height: 38px; cursor: pointer }
 .checkrow input { width: 16px; height: 16px; accent-color: var(--accent) }
 
+/* ===== 화면 전체 레이아웃: 달력 4/5 + 목록 1/5 ===== */
+body { font-size: clamp(14px, 0.35vw + 9px, 16px) }
+.wrap { max-width: none; display: flex; flex-direction: column; gap: 12px;
+  padding-left: max(clamp(16px, 2vw, 32px), env(safe-area-inset-left, 0px)); padding-right: max(clamp(16px, 2vw, 32px), env(safe-area-inset-right, 0px)); padding-block: 14px }
+.top { align-items: center; gap: 10px 20px; border-bottom: 1px solid var(--line); padding-bottom: 12px }
+.top .brand { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap }
+.top .date { margin: 0 }
+.top .stats { margin-right: auto }
+.calhead { flex-wrap: wrap; gap: 8px 12px }
+.calhead .filters { flex: 1 1 360px; flex-wrap: nowrap; justify-content: flex-end; min-width: 0 }
+.calhead .filters .search { flex: 0 1 260px; min-width: 110px }
+.calhead .filters select { flex: 0 1 auto; min-width: 0 }
+.calhead .filters input, .calhead .filters select { padding: 5px 8px; font-size: .9em }
+.calbody { flex: 1; min-height: 0; display: flex; flex-direction: column }
+@media (max-width: 760px) { .calhead .filters { flex-wrap: wrap; order: 3; flex-basis: 100% } .calhead .filters .search { flex: 1 1 100% } }
+.layout { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(0, 4fr) clamp(280px, 20%, 440px); gap: 16px }
+.layout.noside { grid-template-columns: minmax(0, 1fr) }
+.calpane { min-width: 0; min-height: 0; display: flex; flex-direction: column }
+.month { flex: 1; min-height: 0; display: flex; flex-direction: column }
+.month .days { flex: 1; min-height: 0; grid-auto-rows: minmax(0, 1fr) }
+.cell { overflow: hidden }
+.chip { font-size: .86em }
+.week { flex: 1; min-height: 0 }
+.wcol { overflow-y: auto }
+.wcol.sel { background: var(--accent-soft) }
+.side { min-width: 0; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 12px; padding-right: 2px }
+.side .panel { margin-top: 0; padding: 12px 14px }
+.side .panel-h h3 { font-size: 15px }
+.side .selday { border-color: var(--accent) }
+.side .selday .meter { margin: 4px 0 2px }
+.side .task { gap: 8px; padding: 7px 0 }
+.side .tmeta .memo { flex-basis: 100% }
+.side-h { margin: 0 0 6px; font-size: 15px }
+.dgroup + .dgroup { margin-top: 10px; padding-top: 8px; border-top: 1px dashed var(--line) }
+.dgroup h4 { display: flex; align-items: baseline; gap: 6px; margin: 0 0 2px; font-size: 13px; font-weight: 600 }
+.dgroup h4 small { color: var(--muted); font-weight: 400 }
+.dgroup h4 .gc { margin-left: auto; font-size: 12px; color: var(--muted); font-weight: 400 }
+.dgroup.past { opacity: .75 }
+.dlink { border: 0; background: none; padding: 0; font: inherit; color: inherit; text-align: left }
+.dlink:hover { color: var(--accent) }
+.side .moverow { margin-left: 0 }
+/* 큰 화면: 화면 높이에 맞춰 달력을 꽉 채우고 목록은 따로 스크롤 */
+@media (min-width: 1000px) and (min-height: 560px) {
+  .wrap { height: 100dvh }
+  .cell { min-height: 0 }
+  .wcol { min-height: 0 }
+}
+/* 좁은 화면: 목록을 달력 아래로 */
+@media (max-width: 999px) {
+  .layout { grid-template-columns: minmax(0, 1fr) }
+  .side { overflow: visible }
+  .sidebtn { display: none }
+  .layout.noside .side { display: flex }
+}
+
 @media (max-width: 760px) {
   .week { grid-template-columns: minmax(0, 1fr) }
   .wcol { min-height: 0 }
@@ -229,39 +284,40 @@ button { cursor: pointer }
 <body>
 <div class="wrap">
   <header class="top">
-    <div>
+    <div class="brand">
       <h1>나의 할 일 수첩</h1>
       <p class="date" id="todayline"></p>
     </div>
     <div class="stats" id="stats"></div>
-  </header>
-
-  <div class="bar">
-    <div class="tabs" role="tablist">
-      <button id="tab-cal" role="tab" data-act="tab" data-tab="cal">달력</button>
-      <button id="tab-list" role="tab" data-act="tab" data-tab="list">리스트</button>
-    </div>
     <div class="barr">
+      <button class="btn ghost sm" data-act="cats">카테고리 관리</button>
       <button class="btn sm" id="notifbtn" data-act="notify"></button>
       <select class="themesel" id="themesel" aria-label="화면 모드"><option value="">자동 (시스템)</option><option value="light">라이트 모드</option><option value="dark">다크 모드</option></select>
       <button class="btn primary" id="addbtn" data-act="new">+ 할 일 추가</button>
     </div>
-  </div>
-
-  <div class="filters">
-    <input class="search" id="f-q" type="search" placeholder="제목, 메모, 카테고리 검색" aria-label="검색">
-    <select id="f-cat" aria-label="카테고리 필터"></select>
-    <select id="f-pri" aria-label="우선순위 필터">
-      <option value="">모든 우선순위</option><option value="high">높음</option><option value="mid">보통</option><option value="low">낮음</option>
-    </select>
-    <select id="f-status" aria-label="완료 여부 필터">
-      <option value="all">전체</option><option value="open">미완료만</option><option value="done">완료만</option>
-    </select>
-    <button class="btn ghost sm" data-act="cats">카테고리 관리</button>
-  </div>
+  </header>
 
   <div id="notice"></div>
-  <main id="view"></main>
+  <div class="layout" id="layout">
+    <main class="calpane">
+      <div class="calhead">
+        <h2 id="caltitle"></h2>
+      <div class="filters">
+        <input class="search" id="f-q" type="search" placeholder="제목, 메모, 카테고리 검색" aria-label="검색">
+        <select id="f-cat" aria-label="카테고리 필터"></select>
+        <select id="f-pri" aria-label="우선순위 필터">
+          <option value="">모든 우선순위</option><option value="high">높음</option><option value="mid">보통</option><option value="low">낮음</option>
+        </select>
+        <select id="f-status" aria-label="완료 여부 필터">
+          <option value="all">전체</option><option value="open">미완료만</option><option value="done">완료만</option>
+        </select>
+      </div>
+        <div class="calnav" id="calnav"></div>
+      </div>
+      <div class="calbody" id="view"></div>
+    </main>
+    <aside class="side" id="side" aria-label="할 일 목록"></aside>
+  </div>
 </div>
 <div id="modal-root"></div>
 <div id="alarms" class="alarms" hidden aria-live="assertive"></div>
@@ -328,7 +384,7 @@ button { cursor: pointer }
 
   const S = {
     db: null, status: 'loading', tasks: [], cats: DEFAULT_CATS,
-    tab: store.get('todo.tab', 'cal'), calView: store.get('todo.calView', 'month'),
+    tab: store.get('todo.tab', 'cal'), calView: store.get('todo.calView', 'month'), sideOpen: store.get('todo.side', '1') !== '0',
     cursor: today(), sel: today(), showPast: false, moving: null, movingDate: '', movingTime: '',
     q: '', fCat: '', fPri: '', fStatus: 'all',
   };
@@ -439,6 +495,17 @@ button { cursor: pointer }
     return '';
   }
 
+  // 달력 칸 높이에 맞춰 보여 줄 일정 칩 개수 (1–6)
+  let chipCap = 3;
+  function updateCap() {
+    const c = $('.month .days .cell');
+    if (!c) return false;
+    const n = Math.max(1, Math.min(6, Math.floor((c.clientHeight - 44) / 22)));
+    if (n === chipCap) return false;
+    chipCap = n;
+    return true;
+  }
+
   function renderMonth() {
     const c = parse(S.cursor);
     const first = ymd(new Date(c.getFullYear(), c.getMonth(), 1));
@@ -455,23 +522,16 @@ button { cursor: pointer }
       const cls = ['cell', d < first || d > last ? 'out' : '', d === t ? 'today' : '', d === S.sel ? 'sel' : '', dw === 0 ? 'sun' : '', dw === 6 ? 'sat' : '', hol(d) ? 'hol' : ''].join(' ');
       cells += `<button class="${cls}" data-act="pick" data-date="${d}" title="두 번 누르면 할 일 추가" aria-label="${fmtDay(d)}${hol(d) ? ' ' + hol(d) : ''}, 할 일 ${occs.length}개">
         <span class="chead"><span class="dnum num">${parse(d).getDate()}</span>${hol(d) ? `<span class="holname" title="${hol(d)}">${hol(d)}</span>` : ''}</span>
-        <span class="chips">${occs.slice(0, 3).map(o => `<span class="chip ${esc(o.t.priority)} ${o.done ? 'done' : ''}" data-act="detail" data-id="${esc(o.t.id)}" data-date="${d}" title="${esc(o.t.title)} · 눌러서 자세히 보기">${o.t.time ? esc(o.t.time) + ' ' : ''}${esc(o.t.title)}</span>`).join('')}</span>
-        ${occs.length > 3 ? `<span class="more">+${occs.length - 3}개 더</span>` : ''}
+        <span class="chips">${occs.slice(0, chipCap).map(o => `<span class="chip ${esc(o.t.priority)} ${o.done ? 'done' : ''}" data-act="detail" data-id="${esc(o.t.id)}" data-date="${d}" title="${esc(o.t.title)} · 눌러서 자세히 보기">${o.t.time ? esc(o.t.time) + ' ' : ''}${esc(o.t.title)}</span>`).join('')}</span>
+        ${occs.length > chipCap ? `<span class="more">+${occs.length - chipCap}개 더</span>` : ''}
         <span class="dots">${occs.slice(0, 6).map(o => `<i class="${esc(o.t.priority)} ${o.done ? 'done' : ''}"></i>`).join('')}</span>
         ${occs.length ? meter(r.p) : ''}
       </button>`;
     }
-    const sel = (map[S.sel] || []);
-    const sr = ratio(sel);
     return `<div class="month">
         <div class="grid7">${DOW.map((x, i) => `<div class="dow ${i === 0 ? 'sun' : i === 6 ? 'sat' : ''}">${x}</div>`).join('')}</div>
-        <div class="grid7">${cells}</div>
-      </div>
-      <section class="panel" aria-label="선택한 날의 할 일">
-        <div class="panel-h"><h3>${S.sel === t ? '오늘 · ' : ''}${fmtDay(S.sel)}${hol(S.sel) ? ` <span class="holname">${hol(S.sel)}</span>` : ''}<span class="cnt num">${sel.length ? `${sr.d}/${sr.n} 완료` : ''}</span></h3>
-          <button class="btn sm" data-act="new" data-date="${S.sel}">+ 이 날에 추가</button></div>
-        ${sel.length ? taskList(sel, { detail: true }) : emptyHint() || `<p class="empty">이 날은 할 일이 없습니다. 위의 버튼으로 추가하세요.</p>`}
-      </section>`;
+        <div class="grid7 days">${cells}</div>
+      </div>`;
   }
 
   function renderWeek() {
@@ -483,7 +543,7 @@ button { cursor: pointer }
       const d = addDays(ws, i);
       const occs = map[d] || [];
       const r = ratio(occs);
-      cols += `<div data-date="${d}" class="wcol ${d === t ? 'today' : ''} ${i === 0 ? 'sun' : i === 6 ? 'sat' : ''} ${hol(d) ? 'hol' : ''}">
+      cols += `<div data-date="${d}" class="wcol ${d === t ? 'today' : ''} ${d === S.sel ? 'sel' : ''} ${i === 0 ? 'sun' : i === 6 ? 'sat' : ''} ${hol(d) ? 'hol' : ''}">
         <div class="whead"><span class="d">${DOW[i]}<small class="num">${parse(d).getMonth() + 1}/${parse(d).getDate()}</small></span>
           <span class="num" style="font-size:12px;color:var(--muted)">${occs.length ? `${r.d}/${r.n}` : ''}</span></div>
         ${hol(d) ? `<span class="holname">${hol(d)}</span>` : ''}
@@ -503,55 +563,64 @@ button { cursor: pointer }
     return `${a.getMonth() + 1}월 ${a.getDate()}일 – ${a.getMonth() === b.getMonth() ? '' : (b.getMonth() + 1) + '월 '}${b.getDate()}일`;
   }
 
-  function renderCal() {
-    return `<div class="calhead">
-        <h2>${calTitle()}</h2>
-        <div class="calnav">
-          <button class="btn sm" data-act="prev" aria-label="이전">‹</button>
+  function renderNav() {
+    return `<button class="btn sm" data-act="prev" aria-label="이전">‹</button>
           <button class="btn sm" data-act="gotoday">오늘</button>
           <button class="btn sm" data-act="next" aria-label="다음">›</button>
           <div class="seg" role="group" aria-label="달력 보기">
             <button data-act="calview" data-v="month" aria-pressed="${S.calView === 'month'}">월간</button>
             <button data-act="calview" data-v="week" aria-pressed="${S.calView === 'week'}">주간</button>
           </div>
-        </div>
-      </div>
-      ${S.calView === 'month' ? renderMonth() : renderWeek()}`;
+          <button class="btn sm sidebtn" data-act="side" aria-pressed="${S.sideOpen}" title="오른쪽 목록 ${S.sideOpen ? '접기' : '펼치기'}">${S.sideOpen ? '목록 접기 ›' : '‹ 목록 펼치기'}</button>`;
   }
+  const renderBody = () => S.calView === 'month' ? renderMonth() : renderWeek();
 
-  function renderList() {
+  // 오른쪽 목록: 선택한 날 → 지난 미완료 → 다가오는 일정
+  function renderSide() {
     const t = today();
+    const sel = occRange(S.sel, S.sel);
+    const sr = ratio(sel);
+    let html = `<section class="panel selday" aria-label="선택한 날의 할 일">
+        <div class="panel-h"><h3>${S.sel === t ? '오늘 · ' : ''}${fmtDay(S.sel)}${hol(S.sel) ? ` <span class="holname">${hol(S.sel)}</span>` : ''}<span class="cnt num">${sel.length ? `${sr.d}/${sr.n} 완료` : ''}</span></h3>
+          <button class="btn sm" data-act="new" data-date="${S.sel}">+ 추가</button></div>
+        ${sel.length ? meter(sr.p) + taskList(sel, { detail: true }) : emptyHint() || `<p class="empty">이 날은 할 일이 없습니다. 달력에서 날짜를 두 번 누르거나 “+ 추가”를 누르세요.</p>`}
+      </section>`;
     const od = overdue();
-    const futureMax = S.tasks.reduce((m, x) => !x.repeat && x.date > m ? x.date : m, addDays(t, 30));
-    const from = S.showPast ? addDays(t, -30) : t;
-    const occs = occRange(from, futureMax).filter(o => o.date >= t || o.t.repeat || o.done);
-    const map = byDate(occs);
-    if (!map[t]) map[t] = [];
-    const days = Object.keys(map).sort();
-    let html = '';
     if (od.length) {
       html += `<section class="panel group overdue"><h3>지난 미완료 <small class="num">${od.length}개</small>
-        <button class="btn sm" data-act="carryall" style="margin-left:auto">모두 오늘로 옮기기</button></h3>
-        ${taskList(od, { showDate: true, carry: true })}</section>`;
+        <button class="btn sm" data-act="carryall" style="margin-left:auto">모두 오늘로</button></h3>
+        ${taskList(od, { showDate: true, carry: true, detail: true })}</section>`;
     }
+    const futureMax = S.tasks.reduce((m, x) => !x.repeat && x.date > m ? x.date : m, addDays(t, 30));
+    const from = S.showPast ? addDays(t, -30) : t;
+    const map = byDate(occRange(from, futureMax).filter(o => o.date !== S.sel && (o.date >= t || o.t.repeat || o.done)));
+    const days = Object.keys(map).sort();
+    html += `<section class="panel upcoming"><h3 class="side-h">${S.showPast ? '지난 기록과 다가오는 일정' : '다가오는 일정'}</h3>`;
+    if (!days.length) html += `<p class="empty">${S.status === 'loading' ? '불러오는 중입니다…' : '앞으로 30일 동안 다른 일정이 없습니다.'}</p>`;
     for (const d of days) {
       const list = map[d];
       const r = ratio(list);
       const label = d === t ? '오늘' : d === addDays(t, 1) ? '내일' : d === addDays(t, -1) ? '어제' : '';
-      html += `<section class="panel group ${d < t ? 'past' : ''}">
-        <h3>${label || fmtDay(d)}${label ? `<small>${fmtDay(d)}</small>` : ''}${hol(d) ? `<small class="holname">${hol(d)}</small>` : ''}<span class="gc num">${list.length ? `${r.d}/${r.n} 완료` : ''}</span></h3>
-        ${list.length ? taskList(list) : emptyHint() || `<p class="empty">오늘 할 일이 없습니다. 위의 “+ 할 일 추가”로 시작하세요.</p>`}
-      </section>`;
+      html += `<div class="dgroup ${d < t ? 'past' : ''}">
+          <h4><button class="dlink" data-act="pick" data-date="${d}">${label ? `${label} <small>${fmtDay(d)}</small>` : fmtDay(d)}</button>${hol(d) ? `<small class="holname">${hol(d)}</small>` : ''}<span class="gc num">${r.d}/${r.n}</span></h4>
+          ${taskList(list, { detail: true })}
+        </div>`;
     }
-    html += `<div class="listfoot"><button class="btn ghost sm" data-act="past">${S.showPast ? '지난 기록 숨기기' : '지난 30일 기록 보기'}</button></div>`;
-    return `<div class="list">${html}</div>`;
+    html += `</section><div class="listfoot"><button class="btn ghost sm" data-act="past">${S.showPast ? '지난 기록 숨기기' : '지난 30일 기록 보기'}</button></div>`;
+    return html;
   }
 
   function render() {
-    for (const k of ['cal', 'list']) $('#tab-' + k).setAttribute('aria-selected', String(S.tab === k));
     renderTop(); renderNotice();
-    $('#view').innerHTML = S.tab === 'cal' ? renderCal() : renderList();
+    $('#layout').classList.toggle('noside', !S.sideOpen);
+    $('#caltitle').textContent = calTitle();
+    $('#calnav').innerHTML = renderNav();
+    $('#view').innerHTML = renderBody();
+    $('#side').innerHTML = S.sideOpen ? renderSide() : '';
+    if (S.calView === 'month' && updateCap()) $('#view').innerHTML = renderBody();
   }
+  let resizeT;
+  window.addEventListener('resize', () => { clearTimeout(resizeT); resizeT = setTimeout(() => { if (updateCap()) render(); }, 150); });
 
   /* ---------- modal ---------- */
   let modalClose = null;
@@ -631,7 +700,7 @@ button { cursor: pointer }
             await S.db.collection('tasks').doc().set({ ...body, done: false, doneAt: null, doneDates: [], createdAt: new Date().toISOString() });
           }
           closeModal(); toast(t ? '수정했습니다' : '추가했습니다');
-          if (!t) { S.sel = dt; if (S.tab === 'cal') S.cursor = dt; render(); }
+          if (!t) { S.sel = dt; S.cursor = dt; render(); }
         } catch (err) { showErr(m, err); }
       });
     });
@@ -775,12 +844,13 @@ button { cursor: pointer }
     if (act === 'movego') return doMove();
     if (act === 'movecancel') return closeMove();
     if (act === 'pick' && isDouble(el.dataset.date)) return openTask(null, el.dataset.date);
-    if (act === 'pick') { S.sel = el.dataset.date; const d = parse(S.sel), c = parse(S.cursor); if (d.getMonth() !== c.getMonth()) S.cursor = S.sel; return render(); }
+    if (act === 'pick') { S.sel = el.dataset.date; const d = parse(S.sel), c = parse(S.cursor); if (d.getMonth() !== c.getMonth() || d.getFullYear() !== c.getFullYear() || (S.calView === 'week' && weekStart(S.sel) !== weekStart(S.cursor))) S.cursor = S.sel; return render(); }
     if (act === 'prev') return shift(-1);
     if (act === 'next') return shift(1);
     if (act === 'gotoday') { S.cursor = S.sel = today(); return render(); }
     if (act === 'calview') { S.calView = el.dataset.v; store.set('todo.calView', S.calView); S.cursor = S.sel; return render(); }
     if (act === 'past') { S.showPast = !S.showPast; return render(); }
+    if (act === 'side') { S.sideOpen = !S.sideOpen; store.set('todo.side', S.sideOpen ? '1' : '0'); return render(); }
   });
   document.addEventListener('keydown', e => {
     if (e.key === 'Escape') { if (modalClose) closeModal(); else closeMove(); return; }
