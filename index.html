@@ -720,15 +720,42 @@ body { font-size: clamp(14px, 0.35vw + 9px, 16px) }
 
   /* ---------- modal ---------- */
   let modalClose = null;
+  // 창은 방금 누른 자리에서 부드럽게 커지며 열리고, 닫을 때는 그 자리로 줄어들며 사라집니다
+  let lastOrigin = null, lastOriginAt = 0;
+  document.addEventListener('pointerdown', e => { lastOrigin = e.target.closest('.chip, .bar, .task, .cell, button'); lastOriginAt = Date.now(); }, true);
+  const reduceMotion = () => !!window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
   function openModal(html, onMount) {
-    closeModal();
-    const root = $('#modal-root');
-    root.innerHTML = `<div class="scrim" data-act="scrim"><div class="modal" role="dialog" aria-modal="true">${html}</div></div>`;
+    // 누른 자리는 이전 창을 닫기 전에 잽니다 (상세보기 → 수정은 '수정' 버튼 자리에서 열림)
+    const o = lastOrigin && lastOrigin.isConnected && Date.now() - lastOriginAt < 1500 ? lastOrigin.getBoundingClientRect() : null;
+    closeModal(false);
+    const wrap = document.createElement('div');
+    wrap.className = 'scrim';
+    wrap.dataset.act = 'scrim';
+    wrap.innerHTML = `<div class="modal" role="dialog" aria-modal="true">${html}</div>`;
+    $('#modal-root').appendChild(wrap);
+    const modal = wrap.querySelector('.modal');
     const prev = document.activeElement;
-    modalClose = () => { root.innerHTML = ''; prev?.focus?.(); };
-    onMount?.(root.querySelector('.modal'));
+    const anim = !reduceMotion() && typeof modal.animate === 'function';
+    const fromOrigin = () => {
+      if (!o || !o.width) return 'translateY(14px) scale(.96)';
+      const m = modal.getBoundingClientRect();
+      return `translate(${o.left + o.width / 2 - (m.left + m.width / 2)}px, ${o.top + o.height / 2 - (m.top + m.height / 2)}px) scale(${Math.max(o.width / m.width, .05)}, ${Math.max(o.height / m.height, .05)})`;
+    };
+    if (anim) {
+      modal.animate([{ transform: fromOrigin(), opacity: .4 }, { transform: 'none', opacity: 1 }], { duration: 280, easing: 'cubic-bezier(.2, .8, .2, 1)' });
+      wrap.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 220, easing: 'ease-out' });
+    }
+    modalClose = (animate = true) => {
+      if (animate && anim) {
+        wrap.style.pointerEvents = 'none';
+        modal.animate([{ transform: 'none', opacity: 1 }, { transform: fromOrigin(), opacity: 0 }], { duration: 220, easing: 'cubic-bezier(.4, 0, .6, 1)', fill: 'forwards' });
+        wrap.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 220, easing: 'ease-in', fill: 'forwards' }).onfinish = () => wrap.remove();
+      } else wrap.remove();
+      prev?.focus?.();
+    };
+    onMount?.(modal);
   }
-  function closeModal() { if (modalClose) { const f = modalClose; modalClose = null; f(); } }
+  function closeModal(animate = true) { if (modalClose) { const f = modalClose; modalClose = null; f(animate); } }
 
   function openTask(id, date) {
     const t = id ? S.tasks.find(x => x.id === id) : null;
