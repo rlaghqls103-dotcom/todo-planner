@@ -257,7 +257,6 @@ body { font-size: clamp(14px, 0.35vw + 9px, 16px) }
   .wrap { height: 100dvh }
   .cell { min-height: 0 }
   .wcol { min-height: 0 }
-  .wk { flex: 1 1 0; min-height: 0 }
 }
 /* 좁은 화면: 목록을 달력 아래로 */
 @media (max-width: 999px) {
@@ -270,6 +269,8 @@ body { font-size: clamp(14px, 0.35vw + 9px, 16px) }
 /* ===== 기간 일정 막대 ===== */
 .month .days { display: flex; flex-direction: column }
 .wk { position: relative; flex: 0 0 auto }
+/* 큰 화면: 주 줄들이 달력 높이를 똑같이 나눠 가짐 (작은 화면은 내용 높이) */
+@media (min-width: 1000px) and (min-height: 560px) { .wk { flex: 1 1 0; min-height: 0 } }
 .wkcells { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); height: 100% }
 .cell .chips { margin-top: calc(var(--lanes, 0) * 22px) }
 .bars { position: absolute; left: 0; right: 0; top: 34px; display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); grid-auto-rows: 20px; row-gap: 2px; pointer-events: none; padding: 0 4px }
@@ -576,14 +577,16 @@ body { font-size: clamp(14px, 0.35vw + 9px, 16px) }
     // 같은 날 겹치는 앞 순서 일정보다 항상 아래 줄에 놓아 순서가 뒤바뀌지 않게 합니다
     const placed = [];
     let lanes = 0, html = '';
+    const depth = [0, 0, 0, 0, 0, 0, 0]; // 날짜 칸마다 실제로 지나가는 막대 줄 수
     for (const it of items) {
       const lane = placed.reduce((m, p) => p.c <= it.c + it.len - 1 && it.c <= p.c + p.len - 1 ? Math.max(m, p.lane + 1) : m, 0);
       placed.push({ c: it.c, len: it.len, lane });
       lanes = Math.max(lanes, lane + 1);
+      for (let k = it.c; k < it.c + it.len; k++) depth[k] = Math.max(depth[k], lane + 1);
       const t = it.o.t, contL = t.date < ws, contR = endOf(t) > we;
       html += `<button class="bar ${esc(t.priority)} ${it.o.done ? 'done' : ''} ${contL ? 'cont-l' : ''} ${contR ? 'cont-r' : ''}" style="grid-column:${it.c + 1} / span ${it.len};grid-row:${lane + 1}" data-act="detail" data-id="${esc(t.id)}" data-date="${it.s}" title="${esc(t.title)} · ${spanLabel(t)} (${spanLen(t)}일간)">${!contL && t.time ? `<span class="bt">${esc(t.time)}</span>` : ''}${esc(t.title)}</button>`;
     }
-    return { html, lanes };
+    return { html, lanes, depth };
   }
 
   function renderMonth() {
@@ -599,16 +602,16 @@ body { font-size: clamp(14px, 0.35vw + 9px, 16px) }
     for (let w = 0; w < S.weeks; w++) {
       const ws = addDays(start, w * 7);
       const bars = spanBars(all.filter(o => o.date >= ws && o.date <= addDays(ws, 6)), ws);
-      const cap = Math.max(1, Math.min(6, Math.floor((cellH - 44 - bars.lanes * 22) / 22)));
       let cells = '';
       for (let i = 0; i < 7; i++) {
         const d = addDays(ws, i);
         const occs = map[d] || [];
         const singles = occs.filter(o => !isSpan(o.t));
+        const cap = Math.max(1, Math.min(6, Math.floor((cellH - 44 - bars.depth[i] * 22) / 22)));
         const r = ratio(occs);
         const dw = parse(d).getDay();
         const cls = ['cell', d < first || d > last ? 'out' : '', d === t ? 'today' : '', d === S.sel ? 'sel' : '', dw === 0 ? 'sun' : '', dw === 6 ? 'sat' : '', hol(d) ? 'hol' : ''].join(' ');
-        cells += `<button class="${cls}" data-act="pick" data-date="${d}" title="두 번 누르면 할 일 추가" aria-label="${fmtDay(d)}${hol(d) ? ' ' + hol(d) : ''}, 할 일 ${occs.length}개">
+        cells += `<button class="${cls}" style="--lanes:${bars.depth[i]}" data-act="pick" data-date="${d}" title="두 번 누르면 할 일 추가" aria-label="${fmtDay(d)}${hol(d) ? ' ' + hol(d) : ''}, 할 일 ${occs.length}개">
           <span class="chead"><span class="dnum num">${parse(d).getDate()}</span>${hol(d) ? `<span class="holname" title="${hol(d)}">${hol(d)}</span>` : ''}</span>
           <span class="chips">${singles.slice(0, cap).map(o => `<span class="chip ${esc(o.t.priority)} ${o.done ? 'done' : ''}" data-act="detail" data-id="${esc(o.t.id)}" data-date="${d}" title="${esc(o.t.title)} · 눌러서 자세히 보기">${o.t.time ? esc(o.t.time) + ' ' : ''}${esc(o.t.title)}</span>`).join('')}</span>
           ${singles.length > cap ? `<span class="more">+${singles.length - cap}개 더</span>` : ''}
