@@ -570,17 +570,20 @@ body { font-size: clamp(14px, 0.35vw + 9px, 16px) }
       const s = o.t.date > ws ? o.t.date : ws, e = endOf(o.t) < we ? endOf(o.t) : we;
       items.push({ o, s, e, c: dayDiff(ws, s), len: dayDiff(s, e) + 1 });
     }
-    items.sort((a, b) => a.c - b.c || b.len - a.len);
-    const laneEnd = [];
-    let html = '';
+    // 순서 규칙(모든 주에서 같음): 먼저 시작한 일정 → 더 긴 일정 → 먼저 만든 일정이 위
+    items.sort((a, b) => a.o.t.date.localeCompare(b.o.t.date) || endOf(b.o.t).localeCompare(endOf(a.o.t))
+      || (a.o.t.createdAt || '').localeCompare(b.o.t.createdAt || '') || a.o.t.id.localeCompare(b.o.t.id));
+    // 같은 날 겹치는 앞 순서 일정보다 항상 아래 줄에 놓아 순서가 뒤바뀌지 않게 합니다
+    const placed = [];
+    let lanes = 0, html = '';
     for (const it of items) {
-      let lane = laneEnd.findIndex(x => x < it.c);
-      if (lane < 0) lane = laneEnd.length;
-      laneEnd[lane] = it.c + it.len - 1;
+      const lane = placed.reduce((m, p) => p.c <= it.c + it.len - 1 && it.c <= p.c + p.len - 1 ? Math.max(m, p.lane + 1) : m, 0);
+      placed.push({ c: it.c, len: it.len, lane });
+      lanes = Math.max(lanes, lane + 1);
       const t = it.o.t, contL = t.date < ws, contR = endOf(t) > we;
       html += `<button class="bar ${esc(t.priority)} ${it.o.done ? 'done' : ''} ${contL ? 'cont-l' : ''} ${contR ? 'cont-r' : ''}" style="grid-column:${it.c + 1} / span ${it.len};grid-row:${lane + 1}" data-act="detail" data-id="${esc(t.id)}" data-date="${it.s}" title="${esc(t.title)} · ${spanLabel(t)} (${spanLen(t)}일간)">${!contL && t.time ? `<span class="bt">${esc(t.time)}</span>` : ''}${esc(t.title)}</button>`;
     }
-    return { html, lanes: laneEnd.length };
+    return { html, lanes };
   }
 
   function renderMonth() {
