@@ -94,6 +94,8 @@ button { cursor: pointer }
 .month { border-top: 1px solid var(--line); border-left: 1px solid var(--line); background: var(--surface); border-radius: 10px; overflow: hidden }
 .cell { border-right: 1px solid var(--line); border-bottom: 1px solid var(--line); min-height: 104px; padding: 6px; display: flex; flex-direction: column; gap: 4px; text-align: left; background: none; border-top: 0; border-left: 0; min-width: 0 }
 .cell:hover { background: var(--sunk) }
+.chip[data-act] { cursor: pointer }
+.chip[data-act]:hover { background: var(--accent-soft) }
 .cell, .whead { user-select: none; -webkit-user-select: none }
 .cell.out { opacity: .42 }
 .cell.sel { background: var(--accent-soft) }
@@ -158,6 +160,19 @@ button { cursor: pointer }
 .group.overdue h3 { color: var(--hi) }
 .group.past { opacity: .8 }
 .listfoot { display: flex; justify-content: center; gap: 8px; flex-wrap: wrap }
+
+/* detail */
+.detail { display: grid; gap: 12px }
+.dstate { margin: 0; font-size: 12px; letter-spacing: .04em; color: var(--muted) }
+.dstate.done { color: var(--accent); font-weight: 600 }
+.modal .dtitle { display: flex; gap: 10px; align-items: baseline; overflow-wrap: anywhere; min-width: 0 }
+.dlist { margin: 0; display: grid; gap: 8px }
+.drow { display: grid; grid-template-columns: 72px minmax(0, 1fr); gap: 10px; align-items: baseline }
+.drow dt { font-size: 12px; color: var(--muted); letter-spacing: .04em }
+.drow dd { margin: 0; min-width: 0; overflow-wrap: anywhere }
+.mono { font-family: var(--f-mono) }
+.dmemo { background: var(--sunk); border-radius: 8px; padding: 10px 12px; white-space: pre-wrap; overflow-wrap: anywhere }
+.themesel { border: 1px solid var(--line); background: var(--surface); border-radius: 8px; padding: 4px 8px; font-size: 13px; font-weight: 500 }
 
 /* banners, modal, toast */
 .notice { background: var(--accent-soft); border-radius: 10px; padding: 12px 14px }
@@ -228,6 +243,7 @@ button { cursor: pointer }
     </div>
     <div class="barr">
       <button class="btn sm" id="notifbtn" data-act="notify"></button>
+      <select class="themesel" id="themesel" aria-label="화면 모드"><option value="">자동 (시스템)</option><option value="light">라이트 모드</option><option value="dark">다크 모드</option></select>
       <button class="btn primary" id="addbtn" data-act="new">+ 할 일 추가</button>
     </div>
   </div>
@@ -363,7 +379,7 @@ button { cursor: pointer }
 
   /* ---------- pieces ---------- */
   const catColor = name => (S.cats.find(c => c.name === name) || {}).color || '#7a857f';
-  const catChip = name => name ? `<span class="cat" style="color:${catColor(name)};background:color-mix(in srgb, ${catColor(name)} 15%, transparent)">${esc(name)}</span>` : '';
+  const catChip = name => name ? `<span class="cat" style="color:color-mix(in srgb, ${catColor(name)} 65%, var(--ink));background:color-mix(in srgb, ${catColor(name)} 15%, transparent)">${esc(name)}</span>` : '';
   const meter = p => `<div class="meter" aria-hidden="true"><i style="width:${p}%"></i></div>`;
 
   function taskRow(o, opt = {}) {
@@ -378,7 +394,7 @@ button { cursor: pointer }
     ].join('');
     return `<li class="task ${o.done ? 'done' : ''}" data-id="${esc(t.id)}" data-date="${o.date}">
       <button class="check" data-act="toggle" aria-label="${o.done ? '완료 취소' : '완료로 표시'}"></button>
-      <button class="tmain" data-act="edit">
+      <button class="tmain" data-act="${opt.detail ? 'detail' : 'edit'}">
         <span class="ttitle"><span class="pri ${esc(t.priority)}" title="우선순위 ${PRI[t.priority] || ''}"></span>${esc(t.title)}</span>
         ${meta ? `<span class="tmeta">${meta}</span>` : ''}
       </button>
@@ -439,7 +455,7 @@ button { cursor: pointer }
       const cls = ['cell', d < first || d > last ? 'out' : '', d === t ? 'today' : '', d === S.sel ? 'sel' : '', dw === 0 ? 'sun' : '', dw === 6 ? 'sat' : '', hol(d) ? 'hol' : ''].join(' ');
       cells += `<button class="${cls}" data-act="pick" data-date="${d}" title="두 번 누르면 할 일 추가" aria-label="${fmtDay(d)}${hol(d) ? ' ' + hol(d) : ''}, 할 일 ${occs.length}개">
         <span class="chead"><span class="dnum num">${parse(d).getDate()}</span>${hol(d) ? `<span class="holname" title="${hol(d)}">${hol(d)}</span>` : ''}</span>
-        <span class="chips">${occs.slice(0, 3).map(o => `<span class="chip ${esc(o.t.priority)} ${o.done ? 'done' : ''}">${o.t.time ? esc(o.t.time) + ' ' : ''}${esc(o.t.title)}</span>`).join('')}</span>
+        <span class="chips">${occs.slice(0, 3).map(o => `<span class="chip ${esc(o.t.priority)} ${o.done ? 'done' : ''}" data-act="detail" data-id="${esc(o.t.id)}" data-date="${d}" title="${esc(o.t.title)} · 눌러서 자세히 보기">${o.t.time ? esc(o.t.time) + ' ' : ''}${esc(o.t.title)}</span>`).join('')}</span>
         ${occs.length > 3 ? `<span class="more">+${occs.length - 3}개 더</span>` : ''}
         <span class="dots">${occs.slice(0, 6).map(o => `<i class="${esc(o.t.priority)} ${o.done ? 'done' : ''}"></i>`).join('')}</span>
         ${occs.length ? meter(r.p) : ''}
@@ -454,7 +470,7 @@ button { cursor: pointer }
       <section class="panel" aria-label="선택한 날의 할 일">
         <div class="panel-h"><h3>${S.sel === t ? '오늘 · ' : ''}${fmtDay(S.sel)}${hol(S.sel) ? ` <span class="holname">${hol(S.sel)}</span>` : ''}<span class="cnt num">${sel.length ? `${sr.d}/${sr.n} 완료` : ''}</span></h3>
           <button class="btn sm" data-act="new" data-date="${S.sel}">+ 이 날에 추가</button></div>
-        ${sel.length ? taskList(sel) : emptyHint() || `<p class="empty">이 날은 할 일이 없습니다. 위의 버튼으로 추가하세요.</p>`}
+        ${sel.length ? taskList(sel, { detail: true }) : emptyHint() || `<p class="empty">이 날은 할 일이 없습니다. 위의 버튼으로 추가하세요.</p>`}
       </section>`;
   }
 
@@ -472,7 +488,7 @@ button { cursor: pointer }
           <span class="num" style="font-size:12px;color:var(--muted)">${occs.length ? `${r.d}/${r.n}` : ''}</span></div>
         ${hol(d) ? `<span class="holname">${hol(d)}</span>` : ''}
         ${occs.length ? meter(r.p) : ''}
-        ${occs.length ? taskList(occs) : ''}
+        ${occs.length ? taskList(occs, { detail: true }) : ''}
         <button class="wadd" data-act="new" data-date="${d}" aria-label="${fmtDay(d)}에 할 일 추가">+ 추가</button>
       </div>`;
     }
@@ -745,6 +761,14 @@ button { cursor: pointer }
     if (act === 'cats') return openCats();
     if (act === 'toggle' && li) return toggle(li.dataset.id, li.dataset.date);
     if (act === 'edit' && li) return openTask(li.dataset.id, li.dataset.date);
+    if (act === 'detail') { const src = li || el; return openDetail(src.dataset.id, src.dataset.date); }
+    if (act === 'd-toggle' || act === 'd-edit') {
+      const d = el.closest('.detail');
+      if (act === 'd-edit') return openTask(d.dataset.id, d.dataset.date);
+      const wasDone = d.dataset.done === '1';
+      closeModal(); toggle(d.dataset.id, d.dataset.date);
+      return toast(wasDone ? '완료를 취소했습니다' : '완료로 표시했습니다');
+    }
     if (act === 'carry' && li) return moveTo([li.dataset.id], today());
     if (act === 'carryall') return moveTo(overdue().map(o => o.t.id), today());
     if (act === 'pickdate' && li) return openMove(li.dataset.id);
@@ -885,6 +909,47 @@ button { cursor: pointer }
       subscribe(f) { subs.add(f); f(data); },
     };
   })();
+
+  /* ---------- 상세보기 ---------- */
+  function openDetail(id, date) {
+    const t = S.tasks.find(x => x.id === id);
+    if (!t) return;
+    const o = mk(t, date || t.date);
+    const row = (k, v) => v ? `<div class="drow"><dt>${k}</dt><dd>${v}</dd></div>` : '';
+    const alarm = t.alarmOff ? '받지 않음'
+      : (t.alarm || t.time) ? `<span class="mono">${esc(t.alarm || t.time)}</span>${t.alarm ? '' : ' (할 일 시간)'}` : '없음';
+    const rep = t.repeat ? `${REPEAT[t.repeat.freq] || ''} · ${fmtDay(t.date)}부터${t.repeat.until ? ` ${fmtDay(t.repeat.until)}까지` : ''}` : '';
+    openModal(`<div class="detail" data-id="${esc(t.id)}" data-date="${o.date}" data-done="${o.done ? 1 : 0}">
+      <p class="dstate ${o.done ? 'done' : ''}">${o.done ? '완료한 일' : '할 일'}</p>
+      <h2 class="dtitle"><span class="pri ${esc(t.priority)}"></span><span>${esc(t.title)}</span></h2>
+      <dl class="dlist">
+        ${row('날짜', fmtDay(o.date) + (hol(o.date) ? ` <span class="holname">${hol(o.date)}</span>` : ''))}
+        ${row('시간', t.time ? `<span class="mono">${esc(t.time)}</span>` : '정하지 않음')}
+        ${row('알림', alarm)}
+        ${row('우선순위', `<span class="pri ${esc(t.priority)}"></span> ${PRI[t.priority] || '보통'}`)}
+        ${row('카테고리', catChip(t.category) || '없음')}
+        ${row('반복', rep)}
+      </dl>
+      ${t.memo ? `<div class="dmemo">${esc(t.memo)}</div>` : ''}
+      <div class="mfoot">
+        <button class="btn" data-act="d-toggle">${o.done ? '완료 취소' : '완료로 표시'}</button>
+        <div class="r"><button class="btn" data-act="d-edit">수정</button><button class="btn primary" data-act="close">닫기</button></div>
+      </div>
+    </div>`, m => m.querySelector('[data-act="close"]').focus());
+  }
+
+  /* ---------- 화면 모드 (자동 / 라이트 / 다크) ---------- */
+  const HOST_THEME = document.documentElement.getAttribute('data-theme');
+  function applyTheme(v) {
+    const r = document.documentElement;
+    if (v === 'light' || v === 'dark') r.setAttribute('data-theme', v);
+    else if (HOST_THEME) r.setAttribute('data-theme', HOST_THEME);
+    else r.removeAttribute('data-theme');
+  }
+  const themeSel = $('#themesel');
+  themeSel.value = store.get('todo.theme', '') || '';
+  applyTheme(themeSel.value);
+  themeSel.addEventListener('change', e => { store.set('todo.theme', e.target.value); applyTheme(e.target.value); });
 
   /* ---------- boot ---------- */
   renderFilters();
