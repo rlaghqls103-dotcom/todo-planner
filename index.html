@@ -329,6 +329,19 @@ body { font-size: clamp(14px, 0.35vw + 9px, 16px) }
 .field.isanchor input { border-color: var(--accent); background: var(--accent-soft); box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 30%, transparent) }
 .field.isanchor > span:first-child::after { content: "시작"; margin-left: 6px; font-size: 11px; color: var(--accent-ink); background: var(--accent); border-radius: 999px; padding: 0 7px; letter-spacing: 0 }
 
+/* ===== n월 할 일 ===== */
+.mpanel .mhead { display: flex; align-items: baseline; gap: 8px; margin-bottom: 6px }
+.mpanel h3 { margin: 0; font-size: 15px; overflow: hidden }
+.mpanel .cnt { margin-left: auto; color: var(--muted); font-size: 12px }
+.mnum { display: inline-block }
+.mbody { overflow: hidden }
+.side .mrow { gap: 8px; padding: 6px 0; align-items: center; flex-wrap: nowrap }
+.mdate { flex: none; border: 0; background: var(--sunk); border-radius: 6px; padding: 2px 6px; font-size: 12px; font-variant-numeric: tabular-nums; min-width: 4.4em; text-align: center; color: var(--ink) }
+.mdate.red { color: var(--sun) } .mdate.blue { color: var(--sat) } .mdate.span { color: var(--accent) }
+.mdate:hover { background: var(--accent-soft) }
+.mrow.rep .repicon { flex: none; width: 20px; text-align: center; color: var(--accent); font-weight: 600 }
+.mrow.rep .meter { height: 4px; margin-top: 4px }
+
 @media (max-width: 760px) {
   .week { grid-template-columns: minmax(0, 1fr) }
   .wcol { min-height: 0 }
@@ -704,7 +717,48 @@ body { font-size: clamp(14px, 0.35vw + 9px, 16px) }
   }
   const renderBody = () => S.calView === 'month' ? renderMonth() : renderWeek();
 
-  // 오른쪽 목록: 선택한 날 → 지난 미완료 → 다가오는 일정
+  // "n월 할 일": 달력이 보여 주는 달의 할 일. 반복 일정은 한 줄로 묶습니다
+  const panelMonth = () => (S.calView === 'month' ? focusDate() : S.cursor).slice(0, 7);
+  function renderMonthPanel() {
+    const key = panelMonth(), [y, mo] = key.split('-').map(Number);
+    const first = `${key}-01`, last = ymd(new Date(y, mo, 0));
+    const occs = occRange(first, last);
+    const items = [], reps = new Map();
+    for (const o of occs) {
+      if (o.t.repeat) {
+        const r = reps.get(o.t.id) || { t: o.t, first: o.date, n: 0, d: 0 };
+        r.n++; if (o.done) r.d++;
+        reps.set(o.t.id, r);
+      } else if (!isSpan(o.t) || o.date === (o.t.date > first ? o.t.date : first)) items.push(o);
+    }
+    const repList = [...reps.values()];
+    const total = items.length + repList.reduce((s, r) => s + r.n, 0);
+    const done = items.filter(o => o.done).length + repList.reduce((s, r) => s + r.d, 0);
+    const pct = total ? Math.round(done / total * 100) : 0;
+    const dcls = d => { const w = parse(d).getDay(); return w === 0 || hol(d) ? 'red' : w === 6 ? 'blue' : ''; };
+    const meta = t => [t.time ? `<span class="time">${esc(t.time)}</span>` : '', catChip(t.category)].join('');
+    let rows = items.map(o => {
+      const t = o.t, sp = isSpan(t);
+      const label = sp ? `${fmtShort(t.date)}–${fmtShort(endOf(t))}` : `${fmtShort(o.date)} ${DOW[parse(o.date).getDay()]}`;
+      return `<li class="task mrow ${o.done ? 'done' : ''}" data-id="${esc(t.id)}" data-date="${o.date}">
+        <button class="check" data-act="toggle" aria-label="${o.done ? '완료 취소' : '완료로 표시'}"></button>
+        <button class="mdate ${sp ? 'span' : dcls(o.date)}" data-act="pick" data-date="${o.date}" title="${fmtDay(o.date)}${hol(o.date) ? ' · ' + hol(o.date) : ''} 선택">${label}</button>
+        <button class="tmain" data-act="detail"><span class="ttitle"><span class="pri ${esc(t.priority)}"></span>${esc(t.title)}</span>${meta(t) ? `<span class="tmeta">${meta(t)}</span>` : ''}</button>
+      </li>`;
+    }).join('');
+    rows += repList.map(r => `<li class="task mrow rep" data-id="${esc(r.t.id)}" data-date="${r.first}">
+        <span class="repicon" aria-hidden="true">↻</span>
+        <button class="tmain" data-act="detail"><span class="ttitle"><span class="pri ${esc(r.t.priority)}"></span>${esc(r.t.title)}</span>
+          <span class="tmeta"><span>${REPEAT[r.t.repeat.freq] || '반복'}</span><span class="num">${r.n}회 중 ${r.d}회 완료</span>${catChip(r.t.category)}</span>${meter(r.n ? Math.round(r.d / r.n * 100) : 0)}</button>
+      </li>`).join('');
+    return `<section class="panel mpanel" aria-label="${mo}월 할 일">
+        <div class="mhead"><h3><span class="mnum">${y === parse(today()).getFullYear() ? '' : y + '년 '}${mo}월</span> 할 일</h3><span class="cnt num">${total ? `완료 ${done}/${total}` : ''}</span></div>
+        ${total ? meter(pct) : ''}
+        <div class="mbody">${rows ? `<ul class="tasks">${rows}</ul>` : `<p class="empty">${mo}월에는 할 일이 없습니다. 달력에서 날짜를 두 번 누르면 추가할 수 있습니다.</p>`}</div>
+      </section>`;
+  }
+
+  // 오른쪽 목록: 선택한 날 → 지난 미완료 → 다가오는 일정 → n월 할 일
   function renderSide() {
     const t = today();
     const sel = occRange(S.sel, S.sel);
@@ -720,12 +774,12 @@ body { font-size: clamp(14px, 0.35vw + 9px, 16px) }
         <button class="btn sm" data-act="carryall" style="margin-left:auto">모두 오늘로</button></h3>
         ${taskList(od, { showDate: true, carry: true, detail: true })}</section>`;
     }
-    const futureMax = S.tasks.reduce((m, x) => !x.repeat && endOf(x) > m ? endOf(x) : m, addDays(t, 30));
+    const futureMax = addDays(t, 7);
     const from = S.showPast ? addDays(t, -30) : t;
     const map = byDate(occRange(from, futureMax).filter(o => o.date !== S.sel && (o.date >= t || o.t.repeat || o.done) && (!isSpan(o.t) || o.date === (o.t.date > from ? o.t.date : from))));
     const days = Object.keys(map).sort();
     html += `<section class="panel upcoming"><h3 class="side-h">${S.showPast ? '지난 기록과 다가오는 일정' : '다가오는 일정'}</h3>`;
-    if (!days.length) html += `<p class="empty">${S.status === 'loading' ? '불러오는 중입니다…' : '앞으로 30일 동안 다른 일정이 없습니다.'}</p>`;
+    if (!days.length) html += `<p class="empty">${S.status === 'loading' ? '불러오는 중입니다…' : '앞으로 7일 동안 다른 일정이 없습니다.'}</p>`;
     for (const d of days) {
       const list = map[d];
       const r = ratio(list);
@@ -735,7 +789,7 @@ body { font-size: clamp(14px, 0.35vw + 9px, 16px) }
           ${taskList(list, { detail: true })}
         </div>`;
     }
-    html += `</section><div class="listfoot"><button class="btn ghost sm" data-act="past">${S.showPast ? '지난 기록 숨기기' : '지난 30일 기록 보기'}</button></div>`;
+    html += `</section>${renderMonthPanel()}<div class="listfoot"><button class="btn ghost sm" data-act="past">${S.showPast ? '지난 기록 숨기기' : '지난 30일 기록 보기'}</button></div>`;
     return html;
   }
 
@@ -748,7 +802,17 @@ body { font-size: clamp(14px, 0.35vw + 9px, 16px) }
     $('#side').innerHTML = S.sideOpen ? renderSide() : '';
     if (S.calView === 'month' && updateCap()) $('#view').innerHTML = renderBody();
     refreshWd($('#side'));
+    // 달이 바뀌면 "n월 할 일" 칸을 넘기는 방향으로 밀어 넣습니다
+    const pm = panelMonth();
+    if (lastPanelMonth && pm !== lastPanelMonth && !reduceMotion()) {
+      const dir = pm > lastPanelMonth ? 1 : -1;
+      $('#side .mbody')?.animate([{ transform: `translateX(${32 * dir}px)`, opacity: 0 }, { transform: 'none', opacity: 1 }], { duration: 320, easing: 'cubic-bezier(.2, .8, .2, 1)' });
+      $('#side .mnum')?.animate([{ transform: `translateY(${10 * dir}px)`, opacity: 0 }, { transform: 'none', opacity: 1 }], { duration: 280, easing: 'cubic-bezier(.2, .8, .2, 1)' });
+      $('#side .mpanel > .meter')?.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 300 });
+    }
+    lastPanelMonth = pm;
   }
+  let lastPanelMonth = '';
   let resizeT;
   window.addEventListener('resize', () => { clearTimeout(resizeT); resizeT = setTimeout(() => { if (updateCap()) render(); }, 150); });
 
@@ -988,6 +1052,7 @@ body { font-size: clamp(14px, 0.35vw + 9px, 16px) }
     if (S.calView === 'month') { const f = parse(focusDate()); alignMonth(ymd(new Date(f.getFullYear(), f.getMonth() + dir, 1))); }
     else S.cursor = addDays(S.cursor, 7 * dir);
     render();
+    if (!reduceMotion()) $(S.calView === 'month' ? '#view .month .days' : '#view .weekwrap')?.animate([{ transform: `translateX(${24 * dir}px)`, opacity: .2 }, { transform: 'none', opacity: 1 }], { duration: 280, easing: 'cubic-bezier(.2, .8, .2, 1)' });
   }
 
   // 같은 날짜를 빠르게 두 번 누르면(더블클릭·더블탭) true. 한 번 누를 때마다 화면을 다시 그려서 직접 셉니다.
