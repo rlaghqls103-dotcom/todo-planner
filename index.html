@@ -342,6 +342,34 @@ body { font-size: clamp(14px, 0.35vw + 9px, 16px) }
 .mrow.rep .repicon { flex: none; width: 20px; text-align: center; color: var(--accent); font-weight: 600 }
 .mrow.rep .meter { height: 4px; margin-top: 4px }
 
+/* ===== n월 할 일 (날짜 미정) ===== */
+.mpanel { display: flex; flex-direction: column; gap: 6px }
+.mpanel .mhead { display: flex; align-items: center; gap: 8px }
+.mpanel h3 { margin: 0; font-size: 15px; overflow: hidden }
+.mpanel .cnt { margin-left: auto; color: var(--muted); font-size: 12px }
+.mnum { display: inline-block }
+.mquick input { width: 100%; background: var(--bg); border: 1px dashed var(--line); border-radius: 8px; padding: 7px 10px }
+.mquick input:focus { border-style: solid; border-color: var(--accent); background: var(--surface) }
+.mleft { margin: 0; font-size: 12px; color: var(--hi); display: flex; align-items: center; gap: 6px }
+.mleft .btn { margin-left: auto }
+.mbody { overflow: hidden; min-height: 0 }
+.side .mrow { gap: 8px; padding: 6px 0; align-items: center; flex-wrap: nowrap }
+.mact { flex: none; display: flex; gap: 2px; opacity: .55; transition: opacity .15s }
+.mrow:hover .mact, .mact:focus-within { opacity: 1 }
+.mact .btn { padding: 2px 6px; font-size: 12px }
+.side-h { display: flex; align-items: center; gap: 8px }
+.side-h .btn { margin-left: auto; font-weight: 400 }
+/* 큰 화면: 오른쪽 목록을 한 화면에. n월 할 일이 늘면 다가오는 일정이 줄어듦 (각 칸은 안에서 스크롤) */
+@media (min-width: 1000px) and (min-height: 560px) {
+  .side { overflow: hidden }
+  .side > .panel { min-height: 0 }
+  .side > .selday { flex: 0 0 auto; max-height: 38%; overflow-y: auto }
+  .side > .overdue { flex: 0 0 auto; max-height: 24%; overflow-y: auto }
+  .side > .upcoming { flex: 1 1 0; min-height: 120px; overflow-y: auto }
+  .side > .mpanel { flex: 0 1 auto; min-height: 150px }
+  .side > .mpanel .mbody { flex: 1 1 auto; overflow-y: auto }
+}
+
 @media (max-width: 760px) {
   .week { grid-template-columns: minmax(0, 1fr) }
   .wcol { min-height: 0 }
@@ -717,45 +745,35 @@ body { font-size: clamp(14px, 0.35vw + 9px, 16px) }
   }
   const renderBody = () => S.calView === 'month' ? renderMonth() : renderWeek();
 
-  // "n월 할 일": 달력이 보여 주는 달의 할 일. 반복 일정은 한 줄로 묶습니다
+  // "n월 할 일": 그 달에 해야 하지만 아직 날짜를 정하지 않은 일 (달력에는 나오지 않음)
   const panelMonth = () => (S.calView === 'month' ? focusDate() : S.cursor).slice(0, 7);
+  const monthName = key => { const [y, m] = key.split('-').map(Number); return `${y === parse(today()).getFullYear() ? '' : y + '년 '}${m}월`; };
+  const nextMonthKey = key => { const [y, m] = key.split('-').map(Number); return ymd(new Date(y, m, 1)).slice(0, 7); };
   function renderMonthPanel() {
-    const key = panelMonth(), [y, mo] = key.split('-').map(Number);
-    const first = `${key}-01`, last = ymd(new Date(y, mo, 0));
-    const occs = occRange(first, last);
-    const items = [], reps = new Map();
-    for (const o of occs) {
-      if (o.t.repeat) {
-        const r = reps.get(o.t.id) || { t: o.t, first: o.date, n: 0, d: 0 };
-        r.n++; if (o.done) r.d++;
-        reps.set(o.t.id, r);
-      } else if (!isSpan(o.t) || o.date === (o.t.date > first ? o.t.date : first)) items.push(o);
-    }
-    const repList = [...reps.values()];
-    const total = items.length + repList.reduce((s, r) => s + r.n, 0);
-    const done = items.filter(o => o.done).length + repList.reduce((s, r) => s + r.d, 0);
-    const pct = total ? Math.round(done / total * 100) : 0;
-    const dcls = d => { const w = parse(d).getDay(); return w === 0 || hol(d) ? 'red' : w === 6 ? 'blue' : ''; };
-    const meta = t => [t.time ? `<span class="time">${esc(t.time)}</span>` : '', catChip(t.category)].join('');
-    let rows = items.map(o => {
-      const t = o.t, sp = isSpan(t);
-      const label = sp ? `${fmtShort(t.date)}–${fmtShort(endOf(t))}` : `${fmtShort(o.date)} ${DOW[parse(o.date).getDay()]}`;
-      return `<li class="task mrow ${o.done ? 'done' : ''}" data-id="${esc(t.id)}" data-date="${o.date}">
+    const key = panelMonth(), name = monthName(key);
+    const list = S.tasks.filter(t => !t.date && t.month === key).map(t => ({ t, date: '', done: !!t.done })).filter(passes)
+      .sort((a, b) => a.done - b.done || (PRI_ORDER[a.t.priority] ?? 1) - (PRI_ORDER[b.t.priority] ?? 1) || (a.t.createdAt || '').localeCompare(b.t.createdAt || ''));
+    const left = key === today().slice(0, 7) ? S.tasks.filter(t => !t.date && t.month && t.month < key && !t.done) : [];
+    const d = list.filter(o => o.done).length;
+    const rows = list.map(o => {
+      const t = o.t;
+      const meta = [catChip(t.category), t.memo ? `<span class="memo">${esc(t.memo)}</span>` : ''].join('');
+      return `<li class="task mrow ${o.done ? 'done' : ''}" data-id="${esc(t.id)}" data-date="">
         <button class="check" data-act="toggle" aria-label="${o.done ? '완료 취소' : '완료로 표시'}"></button>
-        <button class="mdate ${sp ? 'span' : dcls(o.date)}" data-act="pick" data-date="${o.date}" title="${fmtDay(o.date)}${hol(o.date) ? ' · ' + hol(o.date) : ''} 선택">${label}</button>
-        <button class="tmain" data-act="detail"><span class="ttitle"><span class="pri ${esc(t.priority)}"></span>${esc(t.title)}</span>${meta(t) ? `<span class="tmeta">${meta(t)}</span>` : ''}</button>
+        <button class="tmain" data-act="medit"><span class="ttitle"><span class="pri ${esc(t.priority)}"></span>${esc(t.title)}</span>${meta ? `<span class="tmeta">${meta}</span>` : ''}</button>
+        ${o.done ? '' : `<span class="mact"><button class="btn sm ghost" data-act="msched" title="날짜를 정해 달력에 넣기">날짜</button><button class="btn sm ghost" data-act="mnext" title="${monthName(nextMonthKey(key))} 할 일로 넘기기">다음 달</button></span>`}
       </li>`;
     }).join('');
-    rows += repList.map(r => `<li class="task mrow rep" data-id="${esc(r.t.id)}" data-date="${r.first}">
-        <span class="repicon" aria-hidden="true">↻</span>
-        <button class="tmain" data-act="detail"><span class="ttitle"><span class="pri ${esc(r.t.priority)}"></span>${esc(r.t.title)}</span>
-          <span class="tmeta"><span>${REPEAT[r.t.repeat.freq] || '반복'}</span><span class="num">${r.n}회 중 ${r.d}회 완료</span>${catChip(r.t.category)}</span>${meter(r.n ? Math.round(r.d / r.n * 100) : 0)}</button>
-      </li>`).join('');
-    return `<section class="panel mpanel" aria-label="${mo}월 할 일">
-        <div class="mhead"><h3><span class="mnum">${y === parse(today()).getFullYear() ? '' : y + '년 '}${mo}월</span> 할 일</h3><span class="cnt num">${total ? `완료 ${done}/${total}` : ''}</span></div>
-        ${total ? meter(pct) : ''}
-        <div class="mbody">${rows ? `<ul class="tasks">${rows}</ul>` : `<p class="empty">${mo}월에는 할 일이 없습니다. 달력에서 날짜를 두 번 누르면 추가할 수 있습니다.</p>`}</div>
+    return `<section class="panel mpanel" aria-label="${name} 할 일">
+        <div class="mhead"><h3><span class="mnum">${name}</span> 할 일</h3><span class="cnt num">${list.length ? `${d}/${list.length} 완료` : ''}</span><button class="btn sm" data-act="mnew" title="자세히 적어서 추가">+ 추가</button></div>
+        <form class="mquick" data-month="${key}"><input id="mq" maxlength="120" autocomplete="off" value="${esc(S.mqDraft || '')}" placeholder="${name}에 할 일 (날짜 미정) 적고 Enter"></form>
+        ${left.length ? `<p class="mleft">지난달까지 못 한 일 ${left.length}개<button class="btn sm ghost" data-act="mpull">${name}로 가져오기</button></p>` : ''}
+        <div class="mbody">${list.length ? `<ul class="tasks">${rows}</ul>` : `<p class="empty">아직 날짜를 정하지 않은 ${name} 할 일이 없습니다. 위 칸에 적고 Enter를 누르세요.</p>`}</div>
       </section>`;
+  }
+  async function addMonthTask(title, month) {
+    if (!S.db || !title) return;
+    await S.db.collection('tasks').doc().set({ title, date: '', endDate: '', month, time: '', alarm: '', alarmOff: false, priority: 'mid', category: S.fCat || '', memo: '', repeat: null, done: false, doneAt: null, doneDates: [], createdAt: new Date().toISOString() });
   }
 
   // 오른쪽 목록: 선택한 날 → 지난 미완료 → 다가오는 일정 → n월 할 일
@@ -778,7 +796,7 @@ body { font-size: clamp(14px, 0.35vw + 9px, 16px) }
     const from = S.showPast ? addDays(t, -30) : t;
     const map = byDate(occRange(from, futureMax).filter(o => o.date !== S.sel && (o.date >= t || o.t.repeat || o.done) && (!isSpan(o.t) || o.date === (o.t.date > from ? o.t.date : from))));
     const days = Object.keys(map).sort();
-    html += `<section class="panel upcoming"><h3 class="side-h">${S.showPast ? '지난 기록과 다가오는 일정' : '다가오는 일정'}</h3>`;
+    html += `<section class="panel upcoming"><h3 class="side-h">${S.showPast ? '지난 기록과 다가오는 일정' : '다가오는 일정'}<button class="btn ghost sm" data-act="past">${S.showPast ? '지난 기록 숨기기' : '지난 30일 보기'}</button></h3>`;
     if (!days.length) html += `<p class="empty">${S.status === 'loading' ? '불러오는 중입니다…' : '앞으로 7일 동안 다른 일정이 없습니다.'}</p>`;
     for (const d of days) {
       const list = map[d];
@@ -789,7 +807,7 @@ body { font-size: clamp(14px, 0.35vw + 9px, 16px) }
           ${taskList(list, { detail: true })}
         </div>`;
     }
-    html += `</section>${renderMonthPanel()}<div class="listfoot"><button class="btn ghost sm" data-act="past">${S.showPast ? '지난 기록 숨기기' : '지난 30일 기록 보기'}</button></div>`;
+    html += `</section>${renderMonthPanel()}`;
     return html;
   }
 
@@ -808,10 +826,11 @@ body { font-size: clamp(14px, 0.35vw + 9px, 16px) }
       const dir = pm > lastPanelMonth ? 1 : -1;
       $('#side .mbody')?.animate([{ transform: `translateX(${32 * dir}px)`, opacity: 0 }, { transform: 'none', opacity: 1 }], { duration: 320, easing: 'cubic-bezier(.2, .8, .2, 1)' });
       $('#side .mnum')?.animate([{ transform: `translateY(${10 * dir}px)`, opacity: 0 }, { transform: 'none', opacity: 1 }], { duration: 280, easing: 'cubic-bezier(.2, .8, .2, 1)' });
-      $('#side .mpanel > .meter')?.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 300 });
     }
     lastPanelMonth = pm;
+    if (Date.now() < mqFocusUntil) { const q = $('#mq'); if (q && document.activeElement !== q) { q.focus(); q.setSelectionRange(q.value.length, q.value.length); } }
   }
+  let mqFocusUntil = 0;
   let lastPanelMonth = '';
   let resizeT;
   window.addEventListener('resize', () => { clearTimeout(resizeT); resizeT = setTimeout(() => { if (updateCap()) render(); }, 150); });
@@ -855,16 +874,18 @@ body { font-size: clamp(14px, 0.35vw + 9px, 16px) }
   }
   function closeModal(animate = true) { dpClose(); if (modalClose) { const f = modalClose; modalClose = null; f(animate); } }
 
-  function openTask(id, date) {
+  function openTask(id, date, monthKey, opts = {}) {
     const t = id ? S.tasks.find(x => x.id === id) : null;
-    const v = t || { title: '', date: date || S.sel || today(), time: '', priority: 'mid', category: S.fCat || S.cats[0]?.name || '', memo: '', repeat: null, alarm: '', alarmOff: false };
+    const mk2 = t ? (t.date ? '' : t.month || '') : monthKey || '';
+    const v = t || { title: '', date: mk2 ? '' : date || S.sel || today(), time: '', priority: 'mid', category: S.fCat || S.cats[0]?.name || '', memo: '', repeat: null, alarm: '', alarmOff: false };
     const catOpts = [...new Set([...S.cats.map(c => c.name), v.category].filter(Boolean))];
     openModal(`<form id="taskform" novalidate>
       <div style="display:grid;gap:12px">
       <h2>${t ? '할 일 수정' : '새 할 일'}</h2>
+      ${mk2 ? `<p class="hint">${monthName(mk2)} 할 일(날짜 미정)입니다. 날짜를 정하면 달력으로 옮겨집니다.</p>` : ''}
       <label class="field"><span>제목</span><input id="f-title" required maxlength="120" value="${esc(v.title)}" placeholder="예: 주간 보고서 제출"></label>
       <div class="row2">
-        <label class="field"><span>시작 날짜</span><span class="dpbox"><span class="dpin"><input id="f-date" class="dpk" type="text" inputmode="numeric" autocomplete="off" placeholder="YYYY-MM-DD" required value="${esc(v.date)}"><button type="button" class="dpbtn" tabindex="-1" aria-label="달력에서 고르기" title="달력에서 고르기"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><rect x="2" y="3" width="12" height="11" rx="2"/><path d="M2 6.5h12M5.5 1.5v3M10.5 1.5v3"/></svg></button></span><span class="dpwd"></span></span></label>
+        <label class="field"><span>${mk2 ? `날짜 (비우면 ${monthName(mk2)} 할 일로 둠)` : '시작 날짜'}</span><span class="dpbox"><span class="dpin"><input id="f-date" class="dpk" type="text" inputmode="numeric" autocomplete="off" placeholder="YYYY-MM-DD" required value="${esc(v.date)}"><button type="button" class="dpbtn" tabindex="-1" aria-label="달력에서 고르기" title="달력에서 고르기"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><rect x="2" y="3" width="12" height="11" rx="2"/><path d="M2 6.5h12M5.5 1.5v3M10.5 1.5v3"/></svg></button></span><span class="dpwd"></span></span></label>
         <label class="field"><span>끝나는 날짜 (선택)</span><span class="dpbox"><span class="dpin"><input id="f-end" class="dpk" type="text" inputmode="numeric" autocomplete="off" placeholder="YYYY-MM-DD" data-anchor="#f-date" data-clear="1" min="${esc(v.date)}" value="${esc(v.endDate && v.endDate > v.date ? v.endDate : '')}"><button type="button" class="dpbtn" tabindex="-1" aria-label="달력에서 고르기" title="달력에서 고르기"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><rect x="2" y="3" width="12" height="11" rx="2"/><path d="M2 6.5h12M5.5 1.5v3M10.5 1.5v3"/></svg></button></span><span class="dpwd"></span></span></label>
       </div>
       <p class="hint" id="f-endhint">끝나는 날짜를 비워 두면 시작 날짜 하루짜리 할 일이 됩니다.</p>
@@ -889,7 +910,7 @@ body { font-size: clamp(14px, 0.35vw + 9px, 16px) }
         ${t ? `<button type="button" class="btn danger" id="delbtn">삭제</button>` : ''}
         <div class="r"><button type="button" class="btn" data-act="close">취소</button><button class="btn primary" type="submit">저장</button></div>
       </div></div></form>`, m => {
-      $('#f-title', m).focus();
+      if (opts.focusDate) $('#f-date', m).focus(); else $('#f-title', m).focus();
       // 끝나는 날짜와 반복은 같이 쓰지 않습니다: 하나를 정하면 다른 하나가 꺼집니다
       let prevStart = v.date;
       const syncDates = () => {
@@ -921,6 +942,16 @@ body { font-size: clamp(14px, 0.35vw + 9px, 16px) }
         e.preventDefault();
         const title = $('#f-title', m).value.trim(), dt = $('#f-date', m).value;
         if (!title) return showErr(m, '제목을 입력해 주세요.');
+        if (!dt && mk2) {
+          if (!S.db) return showErr(m, '저장소에 연결되지 않아 저장할 수 없습니다.');
+          const mbody = { title, date: '', endDate: '', month: mk2, repeat: null, priority: (m.querySelector('input[name="pri"]:checked') || {}).value || 'mid', category: $('#f-cat2', m).value, memo: $('#f-memo', m).value.trim() };
+          try {
+            if (t) { const { id, ...rest } = t; await S.db.collection('tasks').doc(t.id).set({ ...rest, ...mbody }); }
+            else await S.db.collection('tasks').doc().set({ ...mbody, time: '', alarm: '', alarmOff: false, done: false, doneAt: null, doneDates: [], createdAt: new Date().toISOString() });
+            closeModal(); toast(t ? '수정했습니다' : `${monthName(mk2)} 할 일에 추가했습니다`);
+          } catch (err) { showErr(m, err); }
+          return;
+        }
         if (!dt) return showErr(m, '날짜를 선택해 주세요.');
         if (!isDate(dt)) { $('#f-date', m).focus(); return showErr(m, '시작 날짜를 2026-10-15처럼 입력하거나 달력에서 골라 주세요.'); }
         if (!S.db) return showErr(m, '저장소에 연결되지 않아 저장할 수 없습니다.');
@@ -935,7 +966,7 @@ body { font-size: clamp(14px, 0.35vw + 9px, 16px) }
         const falarm = normTime($('#f-alarm', m).value);
         if (falarm === null) { $('#f-alarm', m).focus(); return showErr(m, TIME_ERR); }
         const body = {
-          title, date: dt, endDate: fend && fend > dt ? fend : '', time: ftime, alarm: falarm, alarmOff: $('#f-alarmoff', m).checked,
+          title, date: dt, month: '', endDate: fend && fend > dt ? fend : '', time: ftime, alarm: falarm, alarmOff: $('#f-alarmoff', m).checked,
           priority: (m.querySelector('input[name="pri"]:checked') || {}).value || 'mid',
           category: $('#f-cat2', m).value, memo: $('#f-memo', m).value.trim(),
           repeat: freq ? { freq, until: until || null } : null,
@@ -947,8 +978,8 @@ body { font-size: clamp(14px, 0.35vw + 9px, 16px) }
           } else {
             await S.db.collection('tasks').doc().set({ ...body, done: false, doneAt: null, doneDates: [], createdAt: new Date().toISOString() });
           }
-          closeModal(); toast(t ? '수정했습니다' : '추가했습니다');
-          if (!t) { S.sel = dt; S.cursor = dt; if (!inMonthView(dt)) alignMonth(dt); render(); }
+          closeModal(); toast(mk2 ? `${fmtDay(dt)} 일정으로 달력에 넣었습니다` : t ? '수정했습니다' : '추가했습니다');
+          if (!t || mk2) { S.sel = dt; S.cursor = dt; if (!inMonthView(dt)) alignMonth(dt); render(); }
         } catch (err) { showErr(m, err); }
       });
     });
@@ -1083,6 +1114,19 @@ body { font-size: clamp(14px, 0.35vw + 9px, 16px) }
     if (act === 'cats') return openCats();
     if (act === 'toggle' && li) return toggle(li.dataset.id, li.dataset.date);
     if (act === 'edit' && li) return openTask(li.dataset.id, li.dataset.date);
+    if (act === 'medit' && li) return openTask(li.dataset.id);
+    if (act === 'msched' && li) return openTask(li.dataset.id, null, null, { focusDate: true });
+    if (act === 'mnew') return openTask(null, null, panelMonth());
+    if (act === 'mnext' && li) {
+      const t = S.tasks.find(x => x.id === li.dataset.id); if (!t || !S.db) return;
+      const nk = nextMonthKey(t.month);
+      return S.db.collection('tasks').doc(t.id).update({ month: nk }).then(() => toast(`${monthName(nk)} 할 일로 넘겼습니다`), () => toast('옮기지 못했습니다'));
+    }
+    if (act === 'mpull') {
+      const key = panelMonth(), ids = S.tasks.filter(t => !t.date && t.month && t.month < key && !t.done).map(t => t.id);
+      (async () => { for (const id of ids) { try { await S.db.collection('tasks').doc(id).update({ month: key }); } catch {} } toast(`${ids.length}개를 ${monthName(key)} 할 일로 가져왔습니다`); })();
+      return;
+    }
     if (act === 'detail') { const src = li || el; return openDetail(src.dataset.id, src.dataset.date); }
     if (act === 'd-toggle' || act === 'd-edit') {
       const d = el.closest('.detail');
@@ -1139,6 +1183,17 @@ body { font-size: clamp(14px, 0.35vw + 9px, 16px) }
     S.weeks = 5;
     render();
   }, { passive: false });
+
+  document.addEventListener('submit', async e => {
+    if (!e.target.matches?.('form.mquick')) return;
+    e.preventDefault();
+    const q = e.target.querySelector('input'), title = q.value.trim();
+    if (!title) return;
+    S.mqDraft = '';
+    mqFocusUntil = Date.now() + 3000;
+    try { await addMonthTask(title, e.target.dataset.month); } catch { S.mqDraft = title; toast('추가하지 못했습니다'); render(); }
+  });
+  document.addEventListener('input', e => { if (e.target.id === 'mq') S.mqDraft = e.target.value; });
 
   let qT;
   $('#f-q').addEventListener('input', e => { clearTimeout(qT); qT = setTimeout(() => { S.q = e.target.value.trim(); render(); }, 150); });
