@@ -1315,7 +1315,7 @@ body { font-size: clamp(14px, 0.35vw + 9px, 16px) }
 
   /* ---------- 저장소: 이 브라우저의 localStorage ---------- */
   // claude.ai 페이지에서 옮겨 온 할 일. 이 브라우저에 저장된 내용이 없을 때만 쓰입니다.
-  const SEED = {"tasks": [{"id": "ih5pvcycaoh4iqju383k", "alarm": "08:44", "alarmOff": false, "category": "회사", "createdAt": "2026-10-14T23:42:05.424Z", "date": "2026-10-15", "done": true, "doneAt": "2026-10-14T23:45:27.985Z", "doneDates": [], "memo": "", "priority": "mid", "repeat": null, "time": "13:30", "title": "테스트"}, {"id": "n8l0ybgwcivl2vnksr63", "category": "회사", "createdAt": "2026-10-14T23:30:19.856Z", "date": "2026-10-15", "done": false, "doneAt": null, "doneDates": [], "memo": "", "priority": "mid", "repeat": {"freq": "weekdays", "until": null}, "time": "09:00", "title": "경제 리포트 읽기"}], "categories": null};
+  const SEED = {"tasks": [{"id": "n8l0ybgwcivl2vnksr63", "category": "회사", "createdAt": "2026-10-14T23:30:19.856Z", "date": "2026-10-15", "done": false, "doneAt": null, "doneDates": [], "memo": "", "priority": "mid", "repeat": {"freq": "weekdays", "until": null}, "time": "09:00", "title": "경제 리포트 읽기"}], "categories": null};
   const DATA_KEY = 'todo.data';
   const local = (() => {
     let ok = true, data = null;
@@ -1324,6 +1324,13 @@ body { font-size: clamp(14px, 0.35vw + 9px, 16px) }
     const subs = new Set();
     const emit = () => subs.forEach(f => f(data));
     const persist = () => { try { localStorage.setItem(DATA_KEY, JSON.stringify(data)); ok = true; } catch { ok = false; } emit(); };
+    // 한 번만: 시험용으로 만들었던 "테스트", "테스트1" 같은 할 일을 지웁니다
+    try {
+      if (!localStorage.getItem('todo.cleanup.tests1')) {
+        data.tasks = data.tasks.filter(t => !/^테스트\s*\d*$/.test(String(t.title || '').trim()));
+        localStorage.setItem('todo.cleanup.tests1', '1');
+      }
+    } catch {}
     try { localStorage.setItem(DATA_KEY, JSON.stringify(data)); } catch { ok = false; }
     // 같은 PC에서 탭을 여러 개 열었을 때 내용 맞추기
     window.addEventListener('storage', e => { if (e.key === DATA_KEY && e.newValue) { try { data = JSON.parse(e.newValue); emit(); } catch {} } });
@@ -1583,6 +1590,9 @@ body { font-size: clamp(14px, 0.35vw + 9px, 16px) }
   /* ---------- 패치노트: 바뀐 점이 있으면 새로 고칠 때 한 번 알려 줍니다 ---------- */
   // 새 기능을 넣을 때마다 맨 위에 한 항목씩 추가합니다 (v는 겹치지 않게)
   const CHANGELOG = [
+    { v: '2026.10.19-3', date: '2026-10-19', title: '시험용 할 일 정리', items: [
+      '시험용으로 만들었던 "테스트", "테스트1" 같은 할 일을 지웠습니다.',
+    ] },
     { v: '2026.10.19-2', date: '2026-10-19', title: '패치노트', items: [
       '앱이 바뀐 뒤 새로 고치면 이 창이 한 번 떠서 새로워진 점을 알려 줍니다.',
       '상단의 "새 소식" 버튼으로 지난 변경 기록을 언제든 다시 볼 수 있습니다.',
