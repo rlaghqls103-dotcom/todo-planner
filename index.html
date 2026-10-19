@@ -386,6 +386,15 @@ body { font-size: clamp(14px, 0.35vw + 9px, 16px) }
 .daycard .task { gap: 8px; padding: 7px 0 }
 .daycard .tmeta .memo { flex-basis: 100% }
 
+/* ===== 패치노트 ===== */
+#newsbtn { position: relative }
+#newsbtn.unseen::after { content: ""; position: absolute; top: 3px; right: 3px; width: 7px; height: 7px; border-radius: 50%; background: var(--hi) }
+.news-list { display: grid; gap: 14px; max-height: 55vh; overflow-y: auto }
+.news-item h3 { margin: 0 0 4px; font-size: 15px }
+.news-item h3 small { color: var(--muted); font-weight: 400; font-size: 12px; margin-left: 6px }
+.news-item ul { margin: 0; padding-left: 18px; display: grid; gap: 3px; color: var(--ink) }
+.news .mfoot { margin-top: 6px }
+
 @media (max-width: 760px) {
   .week { grid-template-columns: minmax(0, 1fr) }
   .wcol { min-height: 0 }
@@ -410,6 +419,7 @@ body { font-size: clamp(14px, 0.35vw + 9px, 16px) }
     </div>
     <div class="stats" id="stats"></div>
     <div class="barr">
+      <button class="btn ghost sm" id="newsbtn" data-act="news" title="새로워진 점과 변경 기록">새 소식</button>
       <button class="btn ghost sm" data-act="cats">카테고리 관리</button>
       <button class="btn sm" id="notifbtn" data-act="notify"></button>
       <select class="themesel" id="themesel" aria-label="화면 모드"><option value="">자동 (시스템)</option><option value="light">라이트 모드</option><option value="dark">다크 모드</option></select>
@@ -1135,6 +1145,8 @@ body { font-size: clamp(14px, 0.35vw + 9px, 16px) }
     if (act === 'edit' && li) return openTask(li.dataset.id, li.dataset.date);
     if (act === 'dayall') { const d = el.dataset.date; S.sel = d; render(); if (wideScreen()) openDayCard(d); return; }
     if (act === 'dcclose') return closeDayCard();
+    if (act === 'news') return openNews(true);
+    if (act === 'newsall') return openNews(true);
     if (act === 'medit' && li) return openTask(li.dataset.id);
     if (act === 'msched' && li) return openTask(li.dataset.id, null, null, { focusDate: true });
     if (act === 'mnew') return openTask(null, null, panelMonth());
@@ -1567,6 +1579,56 @@ body { font-size: clamp(14px, 0.35vw + 9px, 16px) }
     closeDayCard();
   }, true);
   window.addEventListener('resize', () => placeDayCard());
+
+  /* ---------- 패치노트: 바뀐 점이 있으면 새로 고칠 때 한 번 알려 줍니다 ---------- */
+  // 새 기능을 넣을 때마다 맨 위에 한 항목씩 추가합니다 (v는 겹치지 않게)
+  const CHANGELOG = [
+    { v: '2026.10.19-2', date: '2026-10-19', title: '패치노트', items: [
+      '앱이 바뀐 뒤 새로 고치면 이 창이 한 번 떠서 새로워진 점을 알려 줍니다.',
+      '상단의 "새 소식" 버튼으로 지난 변경 기록을 언제든 다시 볼 수 있습니다.',
+    ] },
+    { v: '2026.10.19-1', date: '2026-10-19', title: '그 날 할 일 모두 보기', items: [
+      '달력 칸의 "+n개 더"나 날짜 숫자를 누르면 그 날 할 일이 모두 담긴 카드가 펼쳐집니다.',
+      '카드 안에서 바로 완료 체크, 상세보기, 할 일 추가를 할 수 있습니다.',
+    ] },
+    { v: '2026.10.16', date: '2026-10-16', title: 'n월 할 일 (날짜 미정)', items: [
+      '오른쪽 아래 "n월 할 일" 칸에 그 달에 할 일을 날짜 없이 적어 둘 수 있습니다. 달력에는 나오지 않습니다.',
+      '각 일에서 "날짜"를 눌러 날짜를 정하면 달력으로 옮겨지고, "다음 달"로 넘길 수도 있습니다.',
+      '오른쪽 목록이 스크롤 없이 한 화면에 들어오고, 다가오는 일정은 7일까지 보여 줍니다.',
+    ] },
+    { v: '2026.10.15-2', date: '2026-10-15', title: '날짜 고르기 달력', items: [
+      '날짜 칸의 달력에서 일요일·공휴일은 붉은색, 토요일은 파란색으로 보입니다.',
+      '끝나는 날짜를 고를 때 시작 날짜가 강조되고, 시작보다 앞선 날은 고를 수 없습니다.',
+    ] },
+    { v: '2026.10.15-1', date: '2026-10-15', title: '기간 일정과 애니메이션', items: [
+      '할 일에 끝나는 날짜를 정하면 달력에 여러 날에 걸친 막대로 보입니다.',
+      '창이 누른 자리에서 부드럽게 열리고 닫히며, 마우스 휠로 달력을 한 주씩 넘길 수 있습니다.',
+    ] },
+  ];
+  const NEWS_KEY = 'todo.seenVersion';
+  function newsHTML(list) {
+    return list.map(c => `<section class="news-item"><h3>${esc(c.title)} <small>${fmtDay(c.date)}</small></h3><ul>${c.items.map(i => `<li>${esc(i)}</li>`).join('')}</ul></section>`).join('');
+  }
+  function openNews(all) {
+    const seen = store.get(NEWS_KEY, '');
+    const idx = CHANGELOG.findIndex(c => c.v === seen);
+    const fresh = all ? CHANGELOG : CHANGELOG.slice(0, idx < 0 ? 1 : idx);
+    if (!fresh.length) return;
+    store.set(NEWS_KEY, CHANGELOG[0].v);
+    renderNewsDot();
+    openModal(`<div class="news">
+      <h2>${all ? '변경 기록' : '새로워진 점'}</h2>
+      <div class="news-list">${newsHTML(fresh)}</div>
+      <div class="mfoot">${all ? '' : '<button class="btn ghost" data-act="newsall">지난 기록 모두 보기</button>'}<div class="r"><button class="btn primary" data-act="close">확인</button></div></div>
+    </div>`, m => m.querySelector('[data-act="close"]').focus());
+  }
+  function renderNewsDot() { $('#newsbtn')?.classList.toggle('unseen', store.get(NEWS_KEY, '') !== CHANGELOG[0].v); }
+  // 이미 쓰던 사람에게만 자동으로 띄웁니다 (처음 연 사람에게는 표시만)
+  setTimeout(() => {
+    if (store.get(NEWS_KEY, '') === CHANGELOG[0].v) return renderNewsDot();
+    if (!S.tasks.length && !store.get(NEWS_KEY, '')) { store.set(NEWS_KEY, CHANGELOG[0].v); return renderNewsDot(); }
+    if (!modalClose) openNews(false);
+  }, 900);
 
   /* ---------- boot ---------- */
   renderFilters();
