@@ -370,6 +370,22 @@ body { font-size: clamp(14px, 0.35vw + 9px, 16px) }
   .side > .mpanel .mbody { flex: 1 1 auto; overflow-y: auto }
 }
 
+/* ===== 날짜 칸 펼치기 카드 ===== */
+.dnum[data-act] { cursor: pointer }
+.cell:not(.today) .dnum[data-act]:hover { background: var(--accent-soft) }
+.more[data-act] { cursor: pointer; align-self: flex-start; border-radius: 4px; padding: 0 5px; font-weight: 600; color: var(--accent) }
+.more[data-act]:hover { background: var(--accent-soft) }
+.daycard { position: fixed; z-index: 25; background: var(--surface); color: var(--ink); border: 1px solid var(--line); border-radius: 12px; box-shadow: var(--shadow); padding: 10px 12px; display: flex; flex-direction: column; gap: 6px; max-height: 60vh; transform-origin: 0 0 }
+.dch { display: flex; align-items: flex-start; gap: 8px }
+.dch > div { flex: 1; min-width: 0 }
+.dch b { font-size: 15px }
+.dcsub { font-size: 12px; color: var(--muted) }
+.dcx { border: 0; background: none; width: 28px; height: 28px; border-radius: 6px; font-size: 18px; line-height: 1; color: var(--muted); padding: 0 }
+.dcx:hover { background: var(--sunk); color: var(--ink) }
+.dcbody { overflow-y: auto; min-height: 0 }
+.daycard .task { gap: 8px; padding: 7px 0 }
+.daycard .tmeta .memo { flex-basis: 100% }
+
 @media (max-width: 760px) {
   .week { grid-template-columns: minmax(0, 1fr) }
   .wcol { min-height: 0 }
@@ -686,9 +702,9 @@ body { font-size: clamp(14px, 0.35vw + 9px, 16px) }
         const dw = parse(d).getDay();
         const cls = ['cell', d < first || d > last ? 'out' : '', d === t ? 'today' : '', d === S.sel ? 'sel' : '', dw === 0 ? 'sun' : '', dw === 6 ? 'sat' : '', hol(d) ? 'hol' : ''].join(' ');
         cells += `<button class="${cls}" style="--lanes:${bars.depth[i]}" data-act="pick" data-date="${d}" title="두 번 누르면 할 일 추가" aria-label="${fmtDay(d)}${hol(d) ? ' ' + hol(d) : ''}, 할 일 ${occs.length}개">
-          <span class="chead"><span class="dnum num">${parse(d).getDate()}</span>${hol(d) ? `<span class="holname" title="${hol(d)}">${hol(d)}</span>` : ''}</span>
+          <span class="chead"><span class="dnum num" data-act="dayall" data-date="${d}" title="${fmtDay(d)} 할 일 모두 보기">${parse(d).getDate()}</span>${hol(d) ? `<span class="holname" title="${hol(d)}">${hol(d)}</span>` : ''}</span>
           <span class="chips">${singles.slice(0, cap).map(o => `<span class="chip ${esc(o.t.priority)} ${o.done ? 'done' : ''}" data-act="detail" data-id="${esc(o.t.id)}" data-date="${d}" title="${esc(o.t.title)} · 눌러서 자세히 보기">${o.t.time ? esc(o.t.time) + ' ' : ''}${esc(o.t.title)}</span>`).join('')}</span>
-          ${singles.length > cap ? `<span class="more">+${singles.length - cap}개 더</span>` : ''}
+          ${singles.length > cap ? `<span class="more" data-act="dayall" data-date="${d}" title="${fmtDay(d)} 할 일 모두 보기">+${singles.length - cap}개 더</span>` : ''}
           <span class="dots">${singles.slice(0, 6).map(o => `<i class="${esc(o.t.priority)} ${o.done ? 'done' : ''}"></i>`).join('')}</span>
           ${occs.length ? meter(r.p) : ''}
         </button>`;
@@ -828,6 +844,7 @@ body { font-size: clamp(14px, 0.35vw + 9px, 16px) }
       $('#side .mnum')?.animate([{ transform: `translateY(${10 * dir}px)`, opacity: 0 }, { transform: 'none', opacity: 1 }], { duration: 280, easing: 'cubic-bezier(.2, .8, .2, 1)' });
     }
     lastPanelMonth = pm;
+    if (dayCard) { if (S.calView !== 'month') closeDayCard(false); else refreshDayCard(); }
     if (Date.now() < mqFocusUntil) { const q = $('#mq'); if (q && document.activeElement !== q) { q.focus(); q.setSelectionRange(q.value.length, q.value.length); } }
   }
   let mqFocusUntil = 0;
@@ -845,6 +862,7 @@ body { font-size: clamp(14px, 0.35vw + 9px, 16px) }
     // 누른 자리는 이전 창을 닫기 전에 잽니다 (상세보기 → 수정은 '수정' 버튼 자리에서 열림)
     const o = lastOrigin && lastOrigin.isConnected && Date.now() - lastOriginAt < 1500 ? lastOrigin.getBoundingClientRect() : null;
     closeModal(false);
+    closeDayCard(false);
     const wrap = document.createElement('div');
     wrap.className = 'scrim';
     wrap.dataset.act = 'scrim';
@@ -1079,6 +1097,7 @@ body { font-size: clamp(14px, 0.35vw + 9px, 16px) }
     moveTo([id], d, tm);
   }
   function shift(dir) {
+    closeDayCard(false);
     const c = parse(S.cursor);
     if (S.calView === 'month') { const f = parse(focusDate()); alignMonth(ymd(new Date(f.getFullYear(), f.getMonth() + dir, 1))); }
     else S.cursor = addDays(S.cursor, 7 * dir);
@@ -1114,6 +1133,8 @@ body { font-size: clamp(14px, 0.35vw + 9px, 16px) }
     if (act === 'cats') return openCats();
     if (act === 'toggle' && li) return toggle(li.dataset.id, li.dataset.date);
     if (act === 'edit' && li) return openTask(li.dataset.id, li.dataset.date);
+    if (act === 'dayall') { const d = el.dataset.date; S.sel = d; render(); if (wideScreen()) openDayCard(d); return; }
+    if (act === 'dcclose') return closeDayCard();
     if (act === 'medit' && li) return openTask(li.dataset.id);
     if (act === 'msched' && li) return openTask(li.dataset.id, null, null, { focusDate: true });
     if (act === 'mnew') return openTask(null, null, panelMonth());
@@ -1150,7 +1171,7 @@ body { font-size: clamp(14px, 0.35vw + 9px, 16px) }
     if (act === 'side') { S.sideOpen = !S.sideOpen; store.set('todo.side', S.sideOpen ? '1' : '0'); return render(); }
   });
   document.addEventListener('keydown', e => {
-    if (e.key === 'Escape') { if (modalClose) closeModal(); else closeMove(); return; }
+    if (e.key === 'Escape') { if (modalClose) closeModal(); else if (dayCard) closeDayCard(); else closeMove(); return; }
     if (e.key === 'Enter' && (e.target.id === 'm-date' || e.target.id === 'm-time')) { e.preventDefault(); doMove(); }
   });
   document.addEventListener('input', e => {
@@ -1181,6 +1202,7 @@ body { font-size: clamp(14px, 0.35vw + 9px, 16px) }
     wheelAcc = 0;
     S.top = addDays(S.top, 7 * dir);
     S.weeks = 5;
+    closeDayCard(false);
     render();
   }, { passive: false });
 
@@ -1483,6 +1505,68 @@ body { font-size: clamp(14px, 0.35vw + 9px, 16px) }
   });
   document.addEventListener('scroll', () => dpPlace(), true);
   window.addEventListener('resize', () => dpPlace());
+
+  /* ---------- 날짜 칸 펼치기 카드: 그 날 할 일 모두 보기 ---------- */
+  let dayCard = null;
+  const wideScreen = () => window.matchMedia('(min-width: 641px)').matches;
+  function dayCardHTML(d) {
+    const occs = occRange(d, d), r = ratio(occs);
+    return `<div class="dch"><div><b>${d === today() ? '오늘 · ' : ''}${fmtDay(d)}</b>${hol(d) ? ` <span class="holname">${hol(d)}</span>` : ''}
+        <div class="dcsub num">${occs.length ? `${occs.length}개 중 ${r.d}개 완료` : '할 일이 없습니다'}</div></div>
+        <button class="btn sm" data-act="new" data-date="${d}">+ 추가</button><button class="dcx" data-act="dcclose" aria-label="닫기" title="닫기">×</button></div>
+      ${occs.length ? meter(r.p) : ''}
+      <div class="dcbody">${occs.length ? taskList(occs, { detail: true, progress: true }) : '<p class="empty">“+ 추가”를 누르거나 달력에서 날짜 칸 여백을 두 번 누르세요.</p>'}</div>`;
+  }
+  function placeDayCard() {
+    if (!dayCard) return;
+    const cell = document.querySelector(`.month .cell[data-date="${dayCard.date}"]`);
+    if (!cell) return closeDayCard(false);
+    const o = cell.getBoundingClientRect(), el = dayCard.el;
+    const w = Math.min(Math.max(280, o.width * 1.5), window.innerWidth - 16);
+    el.style.width = w + 'px';
+    const h = el.offsetHeight;
+    el.style.left = Math.max(8, Math.min(o.left - (w - o.width) / 2, window.innerWidth - w - 8)) + 'px';
+    el.style.top = Math.max(8, Math.min(o.top - 4, window.innerHeight - h - 8)) + 'px';
+    dayCard.o = o;
+  }
+  function openDayCard(d) {
+    closeDayCard(false);
+    const el = document.createElement('div');
+    el.className = 'daycard';
+    el.setAttribute('role', 'dialog');
+    el.setAttribute('aria-label', `${fmtDay(d)} 할 일`);
+    el.innerHTML = dayCardHTML(d);
+    document.body.appendChild(el);
+    dayCard = { date: d, el, o: null };
+    placeDayCard();
+    const o = dayCard?.o;
+    if (o && !reduceMotion()) {
+      const m = el.getBoundingClientRect();
+      el.animate([{ transform: `translate(${o.left - m.left}px, ${o.top - m.top}px) scale(${o.width / m.width}, ${o.height / m.height})`, opacity: .4 }, { transform: 'none', opacity: 1 }], { duration: 240, easing: 'cubic-bezier(.2, .8, .2, 1)' });
+    }
+  }
+  function closeDayCard(animate = true) {
+    if (!dayCard) return;
+    const { el, o } = dayCard;
+    dayCard = null;
+    if (animate && o && !reduceMotion()) {
+      const m = el.getBoundingClientRect();
+      el.style.pointerEvents = 'none';
+      el.animate([{ transform: 'none', opacity: 1 }, { transform: `translate(${o.left - m.left}px, ${o.top - m.top}px) scale(${o.width / m.width}, ${o.height / m.height})`, opacity: 0 }], { duration: 180, easing: 'cubic-bezier(.4, 0, .6, 1)', fill: 'forwards' }).onfinish = () => el.remove();
+    } else el.remove();
+  }
+  function refreshDayCard() {
+    if (!dayCard) return;
+    const sc = dayCard.el.querySelector('.dcbody')?.scrollTop || 0;
+    dayCard.el.innerHTML = dayCardHTML(dayCard.date);
+    const b = dayCard.el.querySelector('.dcbody'); if (b) b.scrollTop = sc;
+    placeDayCard();
+  }
+  document.addEventListener('pointerdown', e => {
+    if (!dayCard || dayCard.el.contains(e.target) || e.target.closest?.('[data-act="dayall"], .scrim, .dp')) return;
+    closeDayCard();
+  }, true);
+  window.addEventListener('resize', () => placeDayCard());
 
   /* ---------- boot ---------- */
   renderFilters();
