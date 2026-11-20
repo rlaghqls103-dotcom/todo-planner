@@ -395,6 +395,11 @@ body { font-size: clamp(14px, 0.35vw + 9px, 16px) }
 .news-item ul { margin: 0; padding-left: 18px; display: grid; gap: 3px; color: var(--ink) }
 .news .mfoot { margin-top: 6px }
 
+/* ===== 완료한 일은 더보기 쪽으로 ===== */
+.more.alldone { color: var(--muted); font-weight: 500 }
+.dcsep { margin: 8px 0 2px; font-size: 12px; color: var(--muted); display: flex; align-items: center; gap: 8px }
+.dcsep::after { content: ""; flex: 1; border-top: 1px dashed var(--line) }
+
 @media (max-width: 760px) {
   .week { grid-template-columns: minmax(0, 1fr) }
   .wcol { min-height: 0 }
@@ -689,6 +694,12 @@ body { font-size: clamp(14px, 0.35vw + 9px, 16px) }
     return { html, lanes, depth };
   }
 
+  // "+n개 더": 숨은 일이 모두 완료한 일이면 "완료 n개"로 흐리게 보여 줍니다
+  function moreTag(hidden, d) {
+    const open = hidden.filter(o => !o.done).length, done = hidden.length - open;
+    return `<span class="more ${open ? '' : 'alldone'}" data-act="dayall" data-date="${d}" title="${fmtDay(d)} 할 일 모두 보기 · 못 한 일 ${open}개 · 완료 ${done}개">${open ? `+${hidden.length}개 더` : `완료 ${done}개`}</span>`;
+  }
+
   function renderMonth() {
     const c = parse(focusDate());
     const first = ymd(new Date(c.getFullYear(), c.getMonth(), 1));
@@ -706,7 +717,8 @@ body { font-size: clamp(14px, 0.35vw + 9px, 16px) }
       for (let i = 0; i < 7; i++) {
         const d = addDays(ws, i);
         const occs = map[d] || [];
-        const singles = occs.filter(o => !isSpan(o.t));
+        // 못 한 일을 먼저, 완료한 일은 뒤로 (그래서 넘치면 완료한 일이 "더보기"로 들어감)
+        const singles = occs.filter(o => !isSpan(o.t)).sort((a, b) => a.done - b.done);
         const cap = Math.max(1, Math.min(6, Math.floor((cellH - 44 - bars.depth[i] * 22) / 22)));
         const r = ratio(occs);
         const dw = parse(d).getDay();
@@ -714,7 +726,7 @@ body { font-size: clamp(14px, 0.35vw + 9px, 16px) }
         cells += `<button class="${cls}" style="--lanes:${bars.depth[i]}" data-act="pick" data-date="${d}" title="두 번 누르면 할 일 추가" aria-label="${fmtDay(d)}${hol(d) ? ' ' + hol(d) : ''}, 할 일 ${occs.length}개">
           <span class="chead"><span class="dnum num" data-act="dayall" data-date="${d}" title="${fmtDay(d)} 할 일 모두 보기">${parse(d).getDate()}</span>${hol(d) ? `<span class="holname" title="${hol(d)}">${hol(d)}</span>` : ''}</span>
           <span class="chips">${singles.slice(0, cap).map(o => `<span class="chip ${esc(o.t.priority)} ${o.done ? 'done' : ''}" data-act="detail" data-id="${esc(o.t.id)}" data-date="${d}" title="${esc(o.t.title)} · 눌러서 자세히 보기">${o.t.time ? esc(o.t.time) + ' ' : ''}${esc(o.t.title)}</span>`).join('')}</span>
-          ${singles.length > cap ? `<span class="more" data-act="dayall" data-date="${d}" title="${fmtDay(d)} 할 일 모두 보기">+${singles.length - cap}개 더</span>` : ''}
+          ${singles.length > cap ? moreTag(singles.slice(cap), d) : ''}
           <span class="dots">${singles.slice(0, 6).map(o => `<i class="${esc(o.t.priority)} ${o.done ? 'done' : ''}"></i>`).join('')}</span>
           ${occs.length ? meter(r.p) : ''}
         </button>`;
@@ -1528,13 +1540,19 @@ body { font-size: clamp(14px, 0.35vw + 9px, 16px) }
   /* ---------- 날짜 칸 펼치기 카드: 그 날 할 일 모두 보기 ---------- */
   let dayCard = null;
   const wideScreen = () => window.matchMedia('(min-width: 641px)').matches;
+  function dayCardList(occs) {
+    const opt = { detail: true, progress: true };
+    const spans = occs.filter(o => isSpan(o.t)), open = occs.filter(o => !isSpan(o.t) && !o.done), fin = occs.filter(o => !isSpan(o.t) && o.done);
+    return ((spans.length || open.length) ? taskList([...spans, ...open], opt) : '')
+      + (fin.length ? `<p class="dcsep">완료한 일 ${fin.length}개</p>${taskList(fin, opt)}` : '');
+  }
   function dayCardHTML(d) {
     const occs = occRange(d, d), r = ratio(occs);
     return `<div class="dch"><div><b>${d === today() ? '오늘 · ' : ''}${fmtDay(d)}</b>${hol(d) ? ` <span class="holname">${hol(d)}</span>` : ''}
         <div class="dcsub num">${occs.length ? `${occs.length}개 중 ${r.d}개 완료` : '할 일이 없습니다'}</div></div>
         <button class="btn sm" data-act="new" data-date="${d}">+ 추가</button><button class="dcx" data-act="dcclose" aria-label="닫기" title="닫기">×</button></div>
       ${occs.length ? meter(r.p) : ''}
-      <div class="dcbody">${occs.length ? taskList(occs, { detail: true, progress: true }) : '<p class="empty">“+ 추가”를 누르거나 달력에서 날짜 칸 여백을 두 번 누르세요.</p>'}</div>`;
+      <div class="dcbody">${occs.length ? dayCardList(occs) : '<p class="empty">“+ 추가”를 누르거나 달력에서 날짜 칸 여백을 두 번 누르세요.</p>'}</div>`;
   }
   function placeDayCard() {
     if (!dayCard) return;
@@ -1590,6 +1608,11 @@ body { font-size: clamp(14px, 0.35vw + 9px, 16px) }
   /* ---------- 패치노트: 바뀐 점이 있으면 새로 고칠 때 한 번 알려 줍니다 ---------- */
   // 새 기능을 넣을 때마다 맨 위에 한 항목씩 추가합니다 (v는 겹치지 않게)
   const CHANGELOG = [
+    { v: '2026.11.20', date: '2026-11-20', title: '달력 칸에서 못 한 일 먼저 보이기', items: [
+      '월간 달력 칸에 일정이 많을 때 아직 못 한 일이 위에 먼저 보이고, 완료한 일은 "+n개 더" 쪽으로 내려갑니다.',
+      '숨은 일이 모두 완료한 일이면 "+n개 더" 대신 "완료 n개"로 흐리게 표시됩니다.',
+      '"+n개 더"를 눌러 펼치는 카드에서도 못 한 일이 먼저, 완료한 일은 아래에 따로 모여 보입니다.',
+    ] },
     { v: '2026.10.19-3', date: '2026-10-19', title: '시험용 할 일 정리', items: [
       '시험용으로 만들었던 "테스트", "테스트1" 같은 할 일을 지웠습니다.',
     ] },
