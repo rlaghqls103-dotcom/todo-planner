@@ -400,6 +400,19 @@ body { font-size: clamp(14px, 0.35vw + 9px, 16px) }
 .dcsep { margin: 8px 0 2px; font-size: 12px; color: var(--muted); display: flex; align-items: center; gap: 8px }
 .dcsep::after { content: ""; flex: 1; border-top: 1px dashed var(--line) }
 
+/* ===== 오늘 할 일 작은 창 ===== */
+#pipbtn.on { border-color: var(--accent); color: var(--accent) }
+.pipdoc { margin: 0; height: 100vh; padding: 10px 12px; box-sizing: border-box; background: var(--bg) }
+.pip { display: flex; flex-direction: column; gap: 8px; height: 100% }
+.pip-h { display: flex; align-items: flex-start; gap: 8px }
+.pip-h > div { flex: 1; min-width: 0 }
+.pip-h b { font-size: 15px }
+.pip-body { flex: 1; min-height: 0; overflow-y: auto; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 2px 10px }
+.pip .task { gap: 8px; padding: 7px 0 }
+.pip .tmeta .memo { flex-basis: 100% }
+.pip-add input { width: 100%; background: var(--surface); border: 1px dashed var(--line); border-radius: 8px; padding: 7px 10px }
+.pip-add input:focus { border-style: solid; border-color: var(--accent) }
+
 @media (max-width: 760px) {
   .week { grid-template-columns: minmax(0, 1fr) }
   .wcol { min-height: 0 }
@@ -424,6 +437,7 @@ body { font-size: clamp(14px, 0.35vw + 9px, 16px) }
     </div>
     <div class="stats" id="stats"></div>
     <div class="barr">
+      <button class="btn sm" id="pipbtn" data-act="pip" title="다른 프로그램 위에도 항상 떠 있는 오늘 할 일 창">작은 창</button>
       <button class="btn ghost sm" id="newsbtn" data-act="news" title="새로워진 점과 변경 기록">새 소식</button>
       <button class="btn ghost sm" data-act="cats">카테고리 관리</button>
       <button class="btn sm" id="notifbtn" data-act="notify"></button>
@@ -867,6 +881,7 @@ body { font-size: clamp(14px, 0.35vw + 9px, 16px) }
     }
     lastPanelMonth = pm;
     if (dayCard) { if (S.calView !== 'month') closeDayCard(false); else refreshDayCard(); }
+    renderPip();
     if (Date.now() < mqFocusUntil) { const q = $('#mq'); if (q && document.activeElement !== q) { q.focus(); q.setSelectionRange(q.value.length, q.value.length); } }
   }
   let mqFocusUntil = 0;
@@ -1157,6 +1172,7 @@ body { font-size: clamp(14px, 0.35vw + 9px, 16px) }
     if (act === 'edit' && li) return openTask(li.dataset.id, li.dataset.date);
     if (act === 'dayall') { const d = el.dataset.date; S.sel = d; render(); if (wideScreen()) openDayCard(d); return; }
     if (act === 'dcclose') return closeDayCard();
+    if (act === 'pip') return togglePip();
     if (act === 'news') return openNews(true);
     if (act === 'newsall') return openNews(true);
     if (act === 'medit' && li) return openTask(li.dataset.id);
@@ -1397,6 +1413,7 @@ body { font-size: clamp(14px, 0.35vw + 9px, 16px) }
     if (v === 'light' || v === 'dark') r.setAttribute('data-theme', v);
     else if (HOST_THEME) r.setAttribute('data-theme', HOST_THEME);
     else r.removeAttribute('data-theme');
+    renderPip();
   }
   const themeSel = $('#themesel');
   themeSel.value = store.get('todo.theme', '') || '';
@@ -1608,6 +1625,11 @@ body { font-size: clamp(14px, 0.35vw + 9px, 16px) }
   /* ---------- 패치노트: 바뀐 점이 있으면 새로 고칠 때 한 번 알려 줍니다 ---------- */
   // 새 기능을 넣을 때마다 맨 위에 한 항목씩 추가합니다 (v는 겹치지 않게)
   const CHANGELOG = [
+    { v: '2026.11.24', date: '2026-11-24', title: '오늘 할 일 작은 창', items: [
+      '상단 "작은 창" 버튼을 누르면 다른 프로그램 위에도 항상 떠 있는 오늘 할 일 창이 열립니다 (크롬·엣지).',
+      '작은 창에서 바로 체크하고, 아래 칸에 적어 오늘 할 일을 추가할 수 있습니다.',
+      '창을 오른쪽 위로 끌어다 두면 다음에 열 때도 그 자리에 열립니다.',
+    ] },
     { v: '2026.11.20', date: '2026-11-20', title: '달력 칸에서 못 한 일 먼저 보이기', items: [
       '월간 달력 칸에 일정이 많을 때 아직 못 한 일이 위에 먼저 보이고, 완료한 일은 "+n개 더" 쪽으로 내려갑니다.',
       '숨은 일이 모두 완료한 일이면 "+n개 더" 대신 "완료 n개"로 흐리게 표시됩니다.',
@@ -1663,6 +1685,63 @@ body { font-size: clamp(14px, 0.35vw + 9px, 16px) }
     if (!S.tasks.length && !store.get(NEWS_KEY, '')) { store.set(NEWS_KEY, CHANGELOG[0].v); return renderNewsDot(); }
     if (!modalClose) openNews(false);
   }, 900);
+
+  /* ---------- 오늘 할 일 작은 창: 다른 프로그램 위에도 항상 떠 있음 (크롬·엣지 Document Picture-in-Picture) ---------- */
+  var pipWin = null; // var: 화면 모드 초기화가 이 코드보다 먼저 renderPip을 부르기 때문
+  const pipSupported = () => 'documentPictureInPicture' in window;
+  function pipBtn() { const b = $('#pipbtn'); if (b) { b.textContent = pipWin ? '작은 창 닫기' : '작은 창'; b.classList.toggle('on', !!pipWin); } }
+  function renderPip() {
+    if (!pipWin) return;
+    const doc = pipWin.document, t = today(), root = doc.getElementById('pip');
+    if (!root) return;
+    const theme = document.documentElement.getAttribute('data-theme');
+    if (theme) doc.documentElement.setAttribute('data-theme', theme); else doc.documentElement.removeAttribute('data-theme');
+    const occs = occRange(t, t), r = ratio(occs);
+    const draft = doc.getElementById('pipq')?.value || '', focused = doc.activeElement?.id === 'pipq';
+    const sc = root.querySelector('.pip-body')?.scrollTop || 0;
+    root.innerHTML = `<div class="pip-h"><div><b>오늘 · ${fmtDay(t)}</b>${hol(t) ? ` <span class="holname">${hol(t)}</span>` : ''}
+        <div class="dcsub num">${occs.length ? `완료 ${r.d}/${r.n}` : '오늘 할 일이 없습니다'}</div></div>
+        <button class="btn sm ghost" data-act="pipapp" title="할 일 수첩 창으로 돌아가기">앱 열기</button></div>
+      ${occs.length ? meter(r.p) : ''}
+      <div class="pip-body">${occs.length ? dayCardList(occs) : '<p class="empty">아래 칸에 적고 Enter를 누르면 오늘 할 일로 추가됩니다.</p>'}</div>
+      <form class="pip-add"><input id="pipq" maxlength="120" autocomplete="off" placeholder="오늘 할 일 추가 (적고 Enter)"></form>`;
+    const q = doc.getElementById('pipq');
+    q.value = draft;
+    if (focused) q.focus();
+    const body = root.querySelector('.pip-body'); if (body) body.scrollTop = sc;
+  }
+  async function togglePip() {
+    if (pipWin) return pipWin.close();
+    if (!pipSupported()) return toast('이 브라우저에서는 작은 창을 띄울 수 없습니다. 크롬이나 엣지 최신 버전에서 열어 주세요.', 5000);
+    try {
+      const w = await documentPictureInPicture.requestWindow({ width: 340, height: 460 });
+      for (const n of document.querySelectorAll('style, link[rel="stylesheet"]')) w.document.head.appendChild(n.cloneNode(true));
+      w.document.title = '오늘 할 일';
+      w.document.body.className = 'pipdoc';
+      w.document.body.innerHTML = '<div id="pip" class="pip"></div>';
+      w.document.addEventListener('click', e => {
+        const el = e.target.closest('[data-act]');
+        if (!el) return;
+        const li = el.closest('.task'), act = el.dataset.act;
+        if (act === 'toggle' && li) return toggle(li.dataset.id, li.dataset.date);
+        if ((act === 'detail' || act === 'edit') && li) { window.focus(); return openDetail(li.dataset.id, li.dataset.date); }
+        if (act === 'pipapp') return window.focus();
+      });
+      w.document.addEventListener('submit', async e => {
+        e.preventDefault();
+        const q = w.document.getElementById('pipq'), title = q.value.trim();
+        if (!title || !S.db) return;
+        q.value = '';
+        try { await S.db.collection('tasks').doc().set({ title, date: today(), endDate: '', month: '', time: '', alarm: '', alarmOff: false, priority: 'mid', category: S.fCat || '', memo: '', repeat: null, done: false, doneAt: null, doneDates: [], createdAt: new Date().toISOString() }); }
+        catch { q.value = title; toast('추가하지 못했습니다'); }
+        w.document.getElementById('pipq')?.focus();
+      });
+      w.addEventListener('pagehide', () => { pipWin = null; pipBtn(); });
+      pipWin = w;
+      pipBtn();
+      renderPip();
+    } catch (err) { toast('작은 창을 열지 못했습니다. 크롬이나 엣지 최신 버전에서, 설치한 앱으로 열어 주세요.', 5000); }
+  }
 
   /* ---------- boot ---------- */
   renderFilters();
