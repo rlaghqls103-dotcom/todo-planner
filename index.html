@@ -413,6 +413,42 @@ body { font-size: clamp(14px, 0.35vw + 9px, 16px) }
 .pip-add input { width: 100%; background: var(--surface); border: 1px dashed var(--line); border-radius: 8px; padding: 7px 10px }
 .pip-add input:focus { border-style: solid; border-color: var(--accent) }
 
+/* 작은 창: 보기 탭 · 주간 · 월별 */
+.pipauto { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; color: var(--muted); cursor: pointer; margin-left: -4px }
+.pipauto input { accent-color: var(--accent) }
+.pip-top { display: flex; align-items: center; gap: 8px }
+.pip-tabs { flex: 1 }
+.pip-tabs button { flex: 1 }
+.pip-main { flex: 1; min-height: 0; display: flex; flex-direction: column; position: relative }
+.pip-day { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 8px; transform-origin: 0 0; background: var(--bg) }
+.pip-back { align-self: flex-start; padding: 2px 6px }
+.pip-h .red { color: var(--sun) } .pip-h .blue { color: var(--sat) }
+.pip-auto { display: flex; align-items: center; gap: 6px; font-size: 11.5px; color: var(--muted); cursor: pointer }
+.pip-auto input { accent-color: var(--accent) }
+.pip-nav { display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px }
+.pip-nav button { border: 0; background: none; width: 30px; height: 28px; border-radius: 6px; font-size: 18px; line-height: 1 }
+.pip-nav button:hover { background: var(--sunk) }
+.pip-week { display: grid; gap: 4px; overflow-y: auto; min-height: 0 }
+.pip-wrow { display: flex; align-items: center; gap: 8px; text-align: left; border: 1px solid var(--line); background: var(--surface); border-radius: 8px; padding: 7px 9px; min-width: 0 }
+.pip-wrow:hover { border-color: var(--accent) }
+.pip-wrow.today { border-color: var(--accent); background: var(--accent-soft) }
+.pw-d { flex: none; width: 3.2em; font-size: 12px; color: var(--muted) }
+.pw-d b { color: var(--ink); font-size: 14px }
+.pw-d.red, .pw-d.red b { color: var(--sun) } .pw-d.blue, .pw-d.blue b { color: var(--sat) }
+.pw-t { flex: 1; min-width: 0; font-size: 12.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis }
+.pw-t em { font-style: normal; color: var(--muted) }
+.pw-c { flex: none; font-size: 11.5px; color: var(--muted) }
+.pm-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 3px; text-align: center }
+.pm-w { font-size: 11px; color: var(--muted); padding: 2px 0 }
+.pm-w.red { color: var(--sun) } .pm-w.blue { color: var(--sat) }
+.pm-d { position: relative; border: 0; background: var(--surface); border-radius: 8px; height: 40px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; padding: 0; font-size: 13px }
+.pm-d:hover { background: var(--accent-soft) }
+.pm-d.red { color: var(--sun) } .pm-d.blue { color: var(--sat) }
+.pm-d.out { opacity: .4 }
+.pm-d.today span { background: var(--accent); color: var(--accent-ink); border-radius: 50%; width: 22px; height: 22px; display: grid; place-items: center; font-weight: 600 }
+.pm-d i { width: 5px; height: 5px; border-radius: 50%; background: var(--accent) }
+.pm-d i.alldone { background: var(--muted); opacity: .45 }
+
 @media (max-width: 760px) {
   .week { grid-template-columns: minmax(0, 1fr) }
   .wcol { min-height: 0 }
@@ -437,7 +473,8 @@ body { font-size: clamp(14px, 0.35vw + 9px, 16px) }
     </div>
     <div class="stats" id="stats"></div>
     <div class="barr">
-      <button class="btn sm" id="pipbtn" data-act="pip" title="다른 프로그램 위에도 항상 떠 있는 오늘 할 일 창">작은 창</button>
+      <button class="btn sm" id="pipbtn" data-act="pip" title="다른 프로그램 위에도 항상 떠 있는 할 일 창">작은 창</button>
+      <label class="pipauto" title="앱을 켜고 처음 누를 때 작은 창을 자동으로 엽니다 (브라우저 규칙상 최소화할 때는 자동으로 열 수 없습니다)"><input type="checkbox" id="pipauto-main"> 자동</label>
       <button class="btn ghost sm" id="newsbtn" data-act="news" title="새로워진 점과 변경 기록">새 소식</button>
       <button class="btn ghost sm" data-act="cats">카테고리 관리</button>
       <button class="btn sm" id="notifbtn" data-act="notify"></button>
@@ -1625,6 +1662,11 @@ body { font-size: clamp(14px, 0.35vw + 9px, 16px) }
   /* ---------- 패치노트: 바뀐 점이 있으면 새로 고칠 때 한 번 알려 줍니다 ---------- */
   // 새 기능을 넣을 때마다 맨 위에 한 항목씩 추가합니다 (v는 겹치지 않게)
   const CHANGELOG = [
+    { v: '2026.11.24-2', date: '2026-11-24', title: '작은 창: 오늘·주간·월별, 자동 열기', items: [
+      '작은 창 위쪽 탭으로 오늘 / 주간 / 월별 보기를 고를 수 있습니다. 마지막에 고른 보기를 기억합니다.',
+      '주간·월별에서 날짜를 누르면 그 칸이 창 전체로 커지며 그 날 할 일이 열리고, 거기서 바로 체크·추가할 수 있습니다.',
+      '"자동"을 켜 두면 앱을 켜고 처음 누를 때 작은 창이 자동으로 열립니다. 브라우저 규칙상 최소화할 때 바로 열리게는 할 수 없습니다.',
+    ] },
     { v: '2026.11.24', date: '2026-11-24', title: '오늘 할 일 작은 창', items: [
       '상단 "작은 창" 버튼을 누르면 다른 프로그램 위에도 항상 떠 있는 오늘 할 일 창이 열립니다 (크롬·엣지).',
       '작은 창에서 바로 체크하고, 아래 칸에 적어 오늘 할 일을 추가할 수 있습니다.',
@@ -1686,37 +1728,101 @@ body { font-size: clamp(14px, 0.35vw + 9px, 16px) }
     if (!modalClose) openNews(false);
   }, 900);
 
-  /* ---------- 오늘 할 일 작은 창: 다른 프로그램 위에도 항상 떠 있음 (크롬·엣지 Document Picture-in-Picture) ---------- */
+  /* ---------- 작은 창: 다른 프로그램 위에도 항상 떠 있음 (크롬·엣지 Document Picture-in-Picture) ---------- */
+  // 보기: 오늘 / 주간 / 월별. 주간·월별에서 날짜를 누르면 그 칸이 창 전체로 커지며 그 날 목록이 열립니다.
   var pipWin = null; // var: 화면 모드 초기화가 이 코드보다 먼저 renderPip을 부르기 때문
+  var pipState = { view: 'today', cursor: '', day: null, origin: null };
   const pipSupported = () => 'documentPictureInPicture' in window;
+  const pipAutoOn = () => store.get('todo.pipAuto', '0') === '1';
   function pipBtn() { const b = $('#pipbtn'); if (b) { b.textContent = pipWin ? '작은 창 닫기' : '작은 창'; b.classList.toggle('on', !!pipWin); } }
+  const dayCls = d => { const w = parse(d).getDay(); return w === 0 || hol(d) ? 'red' : w === 6 ? 'blue' : ''; };
+
+  function pipDayView(d, isToday) {
+    const occs = occRange(d, d), r = ratio(occs);
+    return `<div class="pip-day">
+        ${isToday ? '' : `<button class="btn sm ghost pip-back" data-act="pipback">‹ ${pipState.view === 'week' ? '주간' : '달력'}</button>`}
+        <div class="pip-h"><div><b class="${dayCls(d)}">${d === today() ? '오늘 · ' : ''}${fmtDay(d)}</b>${hol(d) ? ` <span class="holname">${hol(d)}</span>` : ''}
+          <div class="dcsub num">${occs.length ? `완료 ${r.d}/${r.n}` : '할 일이 없습니다'}</div></div></div>
+        ${occs.length ? meter(r.p) : ''}
+        <div class="pip-body">${occs.length ? dayCardList(occs) : '<p class="empty">아래 칸에 적고 Enter를 누르면 이 날 할 일로 추가됩니다.</p>'}</div>
+        <form class="pip-add" data-date="${d}"><input id="pipq" maxlength="120" autocomplete="off" placeholder="${d === today() ? '오늘' : fmtDay(d)} 할 일 추가 (적고 Enter)"></form>
+      </div>`;
+  }
+  function pipWeek() {
+    const ws = weekStart(pipState.cursor), we = addDays(ws, 6), a = parse(ws), b = parse(we);
+    let rows = '';
+    for (let i = 0; i < 7; i++) {
+      const d = addDays(ws, i), occs = occRange(d, d), r = ratio(occs), open = occs.filter(o => !o.done);
+      rows += `<button class="pip-wrow ${d === today() ? 'today' : ''}" data-act="pipday" data-date="${d}" title="${fmtDay(d)} 할 일 보기">
+          <span class="pw-d ${dayCls(d)}">${DOW[i]} <b class="num">${parse(d).getDate()}</b></span>
+          <span class="pw-t">${open.length ? open.slice(0, 3).map(o => esc(o.t.title)).join(' · ') + (open.length > 3 ? ` <em>+${open.length - 3}</em>` : '') : occs.length ? '<em>모두 완료</em>' : ''}</span>
+          <span class="pw-c num">${occs.length ? `${r.d}/${r.n}` : ''}</span></button>`;
+    }
+    return `<div class="pip-nav"><button data-act="pipnav" data-dir="-1" aria-label="이전 주">‹</button><b>${a.getMonth() + 1}월 ${a.getDate()}일 – ${a.getMonth() === b.getMonth() ? '' : (b.getMonth() + 1) + '월 '}${b.getDate()}일</b><button data-act="pipnav" data-dir="1" aria-label="다음 주">›</button></div>
+      <div class="pip-week">${rows}</div>`;
+  }
+  function pipMonth() {
+    const c = parse(pipState.cursor), y = c.getFullYear(), mo = c.getMonth();
+    const first = ymd(new Date(y, mo, 1)), last = ymd(new Date(y, mo + 1, 0));
+    const map = byDate(occRange(weekStart(first), addDays(weekStart(last), 6)));
+    let cells = '';
+    for (let d = weekStart(first); d <= addDays(weekStart(last), 6); d = addDays(d, 1)) {
+      const occs = map[d] || [], open = occs.filter(o => !o.done).length;
+      cells += `<button class="pm-d ${dayCls(d)} ${d < first || d > last ? 'out' : ''} ${d === today() ? 'today' : ''}" data-act="pipday" data-date="${d}" title="${fmtDay(d)}${hol(d) ? ' · ' + hol(d) : ''}${occs.length ? ` · 할 일 ${occs.length}개 (못 한 일 ${open})` : ''}">
+          <span class="num">${parse(d).getDate()}</span>${occs.length ? `<i class="${open ? '' : 'alldone'}"></i>` : ''}</button>`;
+    }
+    return `<div class="pip-nav"><button data-act="pipnav" data-dir="-1" aria-label="이전 달">‹</button><b>${y}년 ${mo + 1}월</b><button data-act="pipnav" data-dir="1" aria-label="다음 달">›</button></div>
+      <div class="pm-grid">${DOW.map((x, i) => `<span class="pm-w ${i === 0 ? 'red' : i === 6 ? 'blue' : ''}">${x}</span>`).join('')}${cells}</div>`;
+  }
   function renderPip() {
     if (!pipWin) return;
-    const doc = pipWin.document, t = today(), root = doc.getElementById('pip');
+    const doc = pipWin.document, root = doc.getElementById('pip');
     if (!root) return;
     const theme = document.documentElement.getAttribute('data-theme');
     if (theme) doc.documentElement.setAttribute('data-theme', theme); else doc.documentElement.removeAttribute('data-theme');
-    const occs = occRange(t, t), r = ratio(occs);
+    if (!pipState.cursor) pipState.cursor = today();
     const draft = doc.getElementById('pipq')?.value || '', focused = doc.activeElement?.id === 'pipq';
     const sc = root.querySelector('.pip-body')?.scrollTop || 0;
-    root.innerHTML = `<div class="pip-h"><div><b>오늘 · ${fmtDay(t)}</b>${hol(t) ? ` <span class="holname">${hol(t)}</span>` : ''}
-        <div class="dcsub num">${occs.length ? `완료 ${r.d}/${r.n}` : '오늘 할 일이 없습니다'}</div></div>
+    const v = pipState.view;
+    const body = pipState.day ? pipDayView(pipState.day, false) : v === 'week' ? pipWeek() : v === 'month' ? pipMonth() : pipDayView(today(), true);
+    root.innerHTML = `<div class="pip-top"><div class="seg pip-tabs" role="group" aria-label="작은 창 보기">${[['today', '오늘'], ['week', '주간'], ['month', '월별']].map(([k, l]) => `<button data-act="pipview" data-v="${k}" aria-pressed="${v === k}">${l}</button>`).join('')}</div>
         <button class="btn sm ghost" data-act="pipapp" title="할 일 수첩 창으로 돌아가기">앱 열기</button></div>
-      ${occs.length ? meter(r.p) : ''}
-      <div class="pip-body">${occs.length ? dayCardList(occs) : '<p class="empty">아래 칸에 적고 Enter를 누르면 오늘 할 일로 추가됩니다.</p>'}</div>
-      <form class="pip-add"><input id="pipq" maxlength="120" autocomplete="off" placeholder="오늘 할 일 추가 (적고 Enter)"></form>`;
+      <div class="pip-main">${body}</div>
+      <label class="pip-auto"><input type="checkbox" id="pipauto-pip" ${pipAutoOn() ? 'checked' : ''}> 앱을 켜면 첫 클릭 때 이 창 자동으로 열기</label>`;
     const q = doc.getElementById('pipq');
-    q.value = draft;
-    if (focused) q.focus();
-    const body = root.querySelector('.pip-body'); if (body) body.scrollTop = sc;
+    if (q) { q.value = draft; if (focused) q.focus(); }
+    const body2 = root.querySelector('.pip-body'); if (body2) body2.scrollTop = sc;
   }
-  async function togglePip() {
+  const pipReduce = () => !!pipWin?.matchMedia?.('(prefers-reduced-motion: reduce)').matches || reduceMotion();
+  const zoomFrom = (o, m) => `translate(${o.left - m.left}px, ${o.top - m.top}px) scale(${Math.max(o.width / m.width, .05)}, ${Math.max(o.height / m.height, .05)})`;
+  function pipOpenDay(d, el) {
+    pipState.origin = el ? el.getBoundingClientRect() : null;
+    pipState.day = d;
+    renderPip();
+    const box = pipWin.document.querySelector('.pip-day'), o = pipState.origin;
+    if (box && o && !pipReduce()) box.animate([{ transform: zoomFrom(o, box.getBoundingClientRect()), opacity: .5 }, { transform: 'none', opacity: 1 }], { duration: 250, easing: 'cubic-bezier(.2, .8, .2, 1)' });
+  }
+  function pipBack() {
+    const box = pipWin?.document.querySelector('.pip-day'), o = pipState.origin;
+    const done = () => { pipState.day = null; renderPip(); };
+    if (box && o && !pipReduce()) {
+      box.style.pointerEvents = 'none';
+      box.animate([{ transform: 'none', opacity: 1 }, { transform: zoomFrom(o, box.getBoundingClientRect()), opacity: 0 }], { duration: 200, easing: 'cubic-bezier(.4, 0, .6, 1)', fill: 'forwards' }).onfinish = done;
+    } else done();
+  }
+  function setPipAuto(on) {
+    store.set('todo.pipAuto', on ? '1' : '0');
+    const m = $('#pipauto-main'); if (m) m.checked = on;
+    renderPip();
+    toast(on ? '앱을 켜고 처음 누를 때 작은 창이 자동으로 열립니다' : '작은 창 자동 열기를 껐습니다');
+  }
+  async function togglePip(silent) {
     if (pipWin) return pipWin.close();
-    if (!pipSupported()) return toast('이 브라우저에서는 작은 창을 띄울 수 없습니다. 크롬이나 엣지 최신 버전에서 열어 주세요.', 5000);
+    if (!pipSupported()) { if (!silent) toast('이 브라우저에서는 작은 창을 띄울 수 없습니다. 크롬이나 엣지 최신 버전에서 열어 주세요.', 5000); return; }
     try {
-      const w = await documentPictureInPicture.requestWindow({ width: 340, height: 460 });
+      const w = await documentPictureInPicture.requestWindow({ width: 360, height: 480 });
       for (const n of document.querySelectorAll('style, link[rel="stylesheet"]')) w.document.head.appendChild(n.cloneNode(true));
-      w.document.title = '오늘 할 일';
+      w.document.title = '할 일 수첩';
       w.document.body.className = 'pipdoc';
       w.document.body.innerHTML = '<div id="pip" class="pip"></div>';
       w.document.addEventListener('click', e => {
@@ -1726,22 +1832,49 @@ body { font-size: clamp(14px, 0.35vw + 9px, 16px) }
         if (act === 'toggle' && li) return toggle(li.dataset.id, li.dataset.date);
         if ((act === 'detail' || act === 'edit') && li) { window.focus(); return openDetail(li.dataset.id, li.dataset.date); }
         if (act === 'pipapp') return window.focus();
+        if (act === 'pipview') { pipState.view = el.dataset.v; pipState.day = null; pipState.cursor = today(); store.set('todo.pipView', pipState.view); return renderPip(); }
+        if (act === 'pipnav') {
+          const dir = +el.dataset.dir, c = parse(pipState.cursor);
+          pipState.cursor = pipState.view === 'week' ? addDays(pipState.cursor, 7 * dir) : ymd(new Date(c.getFullYear(), c.getMonth() + dir, 1));
+          renderPip();
+          const g = w.document.querySelector('.pip-week, .pm-grid');
+          if (g && !pipReduce()) g.animate([{ transform: `translateX(${20 * dir}px)`, opacity: .2 }, { transform: 'none', opacity: 1 }], { duration: 240, easing: 'cubic-bezier(.2, .8, .2, 1)' });
+          return;
+        }
+        if (act === 'pipday') return pipOpenDay(el.dataset.date, el);
+        if (act === 'pipback') return pipBack();
       });
+      w.document.addEventListener('change', e => { if (e.target.id === 'pipauto-pip') setPipAuto(e.target.checked); });
+      w.document.addEventListener('keydown', e => { if (e.key === 'Escape' && pipState.day) { e.preventDefault(); pipBack(); } });
       w.document.addEventListener('submit', async e => {
         e.preventDefault();
-        const q = w.document.getElementById('pipq'), title = q.value.trim();
+        const q = w.document.getElementById('pipq'), title = q.value.trim(), d = e.target.dataset.date || today();
         if (!title || !S.db) return;
         q.value = '';
-        try { await S.db.collection('tasks').doc().set({ title, date: today(), endDate: '', month: '', time: '', alarm: '', alarmOff: false, priority: 'mid', category: S.fCat || '', memo: '', repeat: null, done: false, doneAt: null, doneDates: [], createdAt: new Date().toISOString() }); }
+        try { await S.db.collection('tasks').doc().set({ title, date: d, endDate: '', month: '', time: '', alarm: '', alarmOff: false, priority: 'mid', category: S.fCat || '', memo: '', repeat: null, done: false, doneAt: null, doneDates: [], createdAt: new Date().toISOString() }); }
         catch { q.value = title; toast('추가하지 못했습니다'); }
         w.document.getElementById('pipq')?.focus();
       });
-      w.addEventListener('pagehide', () => { pipWin = null; pipBtn(); });
+      w.addEventListener('pagehide', () => { pipWin = null; pipAutoArmed = true; pipBtn(); });
       pipWin = w;
+      pipState.view = store.get('todo.pipView', 'today');
+      pipState.cursor = today(); pipState.day = null;
       pipBtn();
       renderPip();
-    } catch (err) { toast('작은 창을 열지 못했습니다. 크롬이나 엣지 최신 버전에서, 설치한 앱으로 열어 주세요.', 5000); }
+    } catch (err) { if (!silent) toast('작은 창을 열지 못했습니다. 크롬이나 엣지 최신 버전에서, 설치한 앱으로 열어 주세요.', 5000); }
   }
+  // 자동 열기: 브라우저 규칙상 최소화할 때는 열 수 없어, 앱에서 처음 누르거나 키를 칠 때 엽니다
+  var pipAutoArmed = true;
+  const pipAutoTrigger = e => {
+    if (!pipAutoArmed || pipWin || !pipAutoOn() || !pipSupported()) return;
+    if (e.target.closest?.('#pipbtn, .pipauto, .scrim')) return;
+    pipAutoArmed = false;
+    togglePip(true);
+  };
+  document.addEventListener('pointerdown', pipAutoTrigger, true);
+  document.addEventListener('keydown', pipAutoTrigger, true);
+  document.addEventListener('change', e => { if (e.target.id === 'pipauto-main') setPipAuto(e.target.checked); });
+  { const m = $('#pipauto-main'); if (m) m.checked = pipAutoOn(); }
 
   /* ---------- boot ---------- */
   renderFilters();
