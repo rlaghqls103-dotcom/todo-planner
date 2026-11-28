@@ -400,6 +400,9 @@ body { font-size: clamp(14px, 0.35vw + 9px, 16px) }
 .dcsep { margin: 8px 0 2px; font-size: 12px; color: var(--muted); display: flex; align-items: center; gap: 8px }
 .dcsep::after { content: ""; flex: 1; border-top: 1px dashed var(--line) }
 
+/* 오늘 날짜 원: 토·일·공휴일 색 규칙보다 우선해서 숫자가 원 위에서 잘 보이게 */
+.month .cell.today .dnum { background: var(--accent); color: var(--accent-ink) }
+
 @media (max-width: 760px) {
   .week { grid-template-columns: minmax(0, 1fr) }
   .wcol { min-height: 0 }
@@ -1608,6 +1611,9 @@ body { font-size: clamp(14px, 0.35vw + 9px, 16px) }
   /* ---------- 패치노트: 바뀐 점이 있으면 새로 고칠 때 한 번 알려 줍니다 ---------- */
   // 새 기능을 넣을 때마다 맨 위에 한 항목씩 추가합니다 (v는 겹치지 않게)
   const CHANGELOG = [
+    { v: '2026.11.28', date: '2026-11-28', title: '오늘 날짜 표시 고침', items: [
+      '오늘이 토요일·일요일·공휴일일 때 달력의 초록 원과 날짜 숫자 색이 겹쳐 숫자가 안 보이던 문제를 고쳤습니다.',
+    ] },
     { v: '2026.11.24-3', date: '2026-11-24', title: '작은 창 기능 정리', items: [
       '항상 위에 떠 있던 "작은 창" 기능을 없앴습니다. 브라우저 규칙상 최소화할 때 자동으로 띄울 수 없어 쓰기 불편했기 때문입니다.',
     ] },
